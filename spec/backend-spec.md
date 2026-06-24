@@ -73,7 +73,7 @@ backend/
       requests.py          # NoteRequest 等 Pydantic
       events.py            # SSE 事件 model + 序列化
     core/
-      config.py            # pydantic-settings + Secret Manager
+      config.py            # pydantic-settings（env 載入；secret 經 --set-secrets 注入，見 §9）
       hygiene.py           # [[VAR]] context resolver
       logging.py           # 結構化 log（不含 secret/PII）
   tests/
