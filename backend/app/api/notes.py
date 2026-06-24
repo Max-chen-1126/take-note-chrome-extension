@@ -58,9 +58,6 @@ async def run_pipeline(req: NoteRequest, methodology, settings) -> AsyncIterator
     try:
         async for event in _drive_adk(agent, initial_state):
             author = getattr(event, "author", "")
-            text = ""
-            if getattr(event, "content", None) and event.content.parts:
-                text = "".join(p.text or "" for p in event.content.parts)
             if author != last_author and author.startswith("step_"):
                 if last_author:
                     yield sse("step", {"step": last_author.removeprefix("step_"),
@@ -73,6 +70,9 @@ async def run_pipeline(req: NoteRequest, methodology, settings) -> AsyncIterator
                 if items:
                     yield sse("citations", {"items": items})
             if author == "step_format":
+                text = ""
+                if getattr(event, "content", None) and event.content.parts:
+                    text = "".join(p.text or "" for p in event.content.parts)
                 if getattr(event, "partial", False) and text:
                     yield sse("delta", {"text": text})
                 elif event.is_final_response() and text:

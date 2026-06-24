@@ -1,8 +1,12 @@
+import logging
+
 from fastapi import HTTPException, Request
 from google.auth.transport import requests as ga_requests
 from google.oauth2 import id_token
 
 from app.core.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 _transport = ga_requests.Request()
 
@@ -17,7 +21,11 @@ def verify_request(request: Request) -> str:
         claims = id_token.verify_oauth2_token(
             token, _transport, audience=settings.cloud_run_service_url or None
         )
-    except Exception:
+    except ValueError as exc:
+        # google.oauth2.id_token.verify_oauth2_token 對無效/過期/格式錯誤的
+        # token 一律拋 ValueError；其他例外（例如網路或憑證取得失敗）不應
+        # 冒充成「無效 token」的 401，讓它往外傳並變成 500。
+        logger.warning("ID token verification failed: %s", exc)
         raise HTTPException(status_code=401, detail="invalid token")
     email = claims.get("email")
     if not email or email not in settings.allowed_email_set:
