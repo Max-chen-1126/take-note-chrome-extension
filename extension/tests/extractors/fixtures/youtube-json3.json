@@ -1,0 +1,69 @@
+{
+  "wireMagic": "pb3",
+  "events": [
+    { "tStartMs": 0, "dDurationMs": 1000 },
+    {
+      "tStartMs": 80,
+      "dDurationMs": 4200,
+      "segs": [
+        { "utf8": "Hey everyone, " },
+        { "utf8": "welcome back to the channel. " }
+      ]
+    },
+    {
+      "tStartMs": 4280,
+      "dDurationMs": 3900,
+      "segs": [
+        { "utf8": "Today we're going to walk through " },
+        { "utf8": "how transcript extraction works " },
+        { "utf8": "for this take-note extension." }
+      ]
+    },
+    {
+      "tStartMs": 8180,
+      "dDurationMs": 5000,
+      "segs": [
+        { "utf8": "\n" },
+        { "utf8": "First, the content script reads " },
+        { "utf8": "the player response object " },
+        { "utf8": "to find a caption track base URL." }
+      ]
+    },
+    {
+      "tStartMs": 13180,
+      "dDurationMs": 4500,
+      "segs": [
+        { "utf8": "If that base URL contains exp=xpe, " },
+        { "utf8": "we know the timedtext endpoint " },
+        { "utf8": "may return an empty body, " },
+        { "utf8": "so we fall back to the transcript panel DOM." }
+      ]
+    },
+    {
+      "tStartMs": 17680,
+      "dDurationMs": 4000,
+      "segs": [
+        { "utf8": "Otherwise we fetch the URL with fmt=json3 " },
+        { "utf8": "and join every segment's utf8 text " },
+        { "utf8": "across all of the events array." }
+      ]
+    },
+    {
+      "tStartMs": 21680,
+      "dDurationMs": 3500,
+      "segs": [
+        { "utf8": "That gives us a clean, " },
+        { "utf8": "readable transcript " },
+        { "utf8": "without any timing metadata." }
+      ]
+    },
+    {
+      "tStartMs": 25180,
+      "dDurationMs": 3000,
+      "segs": [
+        { "utf8": "Thanks for watching, " },
+        { "utf8": "and see you in the next one." }
+      ]
+    }
+  ]
+}

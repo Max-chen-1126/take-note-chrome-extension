@@ -1,0 +1,47 @@
+<!--
+  Synthetic fixture: a trimmed snippet shaped like YouTube's "Show transcript"
+  panel DOM (ytd-transcript-renderer > ytd-transcript-segment-list-renderer >
+  ytd-transcript-segment-renderer), used only to validate parsePanelDom's
+  selectors against the documented structure. Not captured from a live page.
+-->
+<div id="panels">
+  <ytd-engagement-panel-section-list-renderer target-id="engagement-panel-searchable-transcript">
+    <ytd-transcript-renderer>
+      <ytd-transcript-search-panel-renderer></ytd-transcript-search-panel-renderer>
+      <ytd-transcript-segment-list-renderer>
+        <div id="segments-container">
+          <ytd-transcript-segment-renderer class="style-scope ytd-transcript-segment-list-renderer">
+            <div class="segment style-scope ytd-transcript-segment-renderer" role="button">
+              <div class="segment-timestamp style-scope ytd-transcript-segment-renderer">0:00</div>
+              <yt-formatted-string class="segment-text style-scope ytd-transcript-segment-renderer">Hey everyone, welcome back to the channel.</yt-formatted-string>
+            </div>
+          </ytd-transcript-segment-renderer>
+          <ytd-transcript-segment-renderer class="style-scope ytd-transcript-segment-list-renderer">
+            <div class="segment style-scope ytd-transcript-segment-renderer" role="button">
+              <div class="segment-timestamp style-scope ytd-transcript-segment-renderer">0:04</div>
+              <yt-formatted-string class="segment-text style-scope ytd-transcript-segment-renderer">Today we're going to walk through how transcript extraction works for this extension.</yt-formatted-string>
+            </div>
+          </ytd-transcript-segment-renderer>
+          <ytd-transcript-segment-renderer class="style-scope ytd-transcript-segment-list-renderer">
+            <div class="segment style-scope ytd-transcript-segment-renderer" role="button">
+              <div class="segment-timestamp style-scope ytd-transcript-segment-renderer">0:08</div>
+              <yt-formatted-string class="segment-text style-scope ytd-transcript-segment-renderer">When the json3 endpoint is blocked, the content script falls back to reading this panel instead.</yt-formatted-string>
+            </div>
+          </ytd-transcript-segment-renderer>
+          <ytd-transcript-segment-renderer class="style-scope ytd-transcript-segment-list-renderer">
+            <div class="segment style-scope ytd-transcript-segment-renderer" role="button">
+              <div class="segment-timestamp style-scope ytd-transcript-segment-renderer">0:13</div>
+              <yt-formatted-string class="segment-text style-scope ytd-transcript-segment-renderer">Each segment renders as its own element with a timestamp and a text span.</yt-formatted-string>
+            </div>
+          </ytd-transcript-segment-renderer>
+          <ytd-transcript-segment-renderer class="style-scope ytd-transcript-segment-list-renderer">
+            <div class="segment style-scope ytd-transcript-segment-renderer" role="button">
+              <div class="segment-timestamp style-scope ytd-transcript-segment-renderer">0:18</div>
+              <yt-formatted-string class="segment-text style-scope ytd-transcript-segment-renderer">Thanks for watching, and see you in the next one.</yt-formatted-string>
+            </div>
+          </ytd-transcript-segment-renderer>
+        </div>
+      </ytd-transcript-segment-list-renderer>
+    </ytd-transcript-renderer>
+  </ytd-engagement-panel-section-list-renderer>
+</div>
