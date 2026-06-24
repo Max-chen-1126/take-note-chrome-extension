@@ -978,6 +978,7 @@ cd backend && uv run uvicorn app.main:app --reload
    - `gcloud run deploy take-note-backend --source backend --region asia-east1 --no-allow-unauthenticated --service-account <SA> --set-env-vars GOOGLE_CLOUD_PROJECT=…,GOOGLE_GENAI_USE_VERTEXAI=TRUE,GOOGLE_CLOUD_LOCATION=global,ALLOWED_EMAILS=…,CLOUD_RUN_SERVICE_URL=<url> --timeout 300`（Phase B 接 LLM 後再加 `--set-secrets`）。
    - e2e：帶 Google ID token 的 curl 對 Cloud Run 跑通真實 transcript。
 8. **Extension 端**：另起 spec→plan→實作（萃取器、Side Panel、SSE 消費、ID token）。
+9. **[協調項] Auth audience 改 client_id**（extension 細節 spec 定案後新增）：extension 走 App 層認證，用 `launchWebAuthFlow` 取得的 Google ID token `aud = OAuth client_id`（非 Cloud Run service URL）。後端需：(a) `verify_request` 改驗 `aud == OAUTH_CLIENT_ID`（新增該 env），(b) Cloud Run 改 `--allow-unauthenticated`（保護改為純 app 層 token+allowlist），(c) 重新評估 §Task2/§final-fix 的 `K_SERVICE` audience 護欄（其前提是 IAM 認證 + service-URL audience，改 client_id 後需調整）。詳見 `spec/extension-spec.md` 跨端協調項。
 
 ## 寫入順序
 Phase A：Task 1 → 11A 依序；建議 subagent-driven（每 task 一個 fresh subagent + 任務間 review）。Phase A happy path 跑通後再進 Phase B。

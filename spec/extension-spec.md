@@ -1,86 +1,163 @@
 # Extension Spec — Take-Note Chrome Extension
 
-> 前端：TypeScript + WXT + Manifest V3。職責是**內容萃取 + UI + 串流呈現**，不做任何 AI、不直接呼叫 LLM vendor。
+> 前端：TypeScript + React + WXT + Manifest V3。職責是**自動擷取 + UI + 串流呈現 + 複製**，不做任何 AI、不直接呼叫 LLM vendor。
+>
+> 本檔遵循 Spec-Driven Development：spec 是一等資產、敘事用 Markdown、深層結構用 YAML、版本號鎖定、護欄右尺寸化。SSE 事件與 `NoteRequest` 與 [`backend-spec.md`](backend-spec.md) 為跨端契約。
 
-## 1. 需求 (Requirements)
+## Context
+後端 Phase A 已完成（Gemini + ADK，`POST /notes/stream` SSE 跑通）。本 spec 細化 extension：React、極簡黑白圓角現代風、開 panel 自動擷取→先呈現擷取內容（唯讀）→使用者按「開始」才處理。初版做**切片**（YouTube + 通用 article）。
 
-### 1.1 使用流程
-1. 使用者在學習頁面（Blog / Book / Podcast 網頁 / YouTube / Coursera）打開 Side Panel。
-2. Side Panel 自動偵測網站類別，使用者可覆寫。
-3. 使用者設定：筆記方向、額外需求、provider/model、「查證上網」開關。
-4. 按「處理」。
-5. Extension 在瀏覽器端萃取內文 / transcript。
-6. 將萃取結果 + 參數送到後端 `/notes/stream`。
-7. 即時呈現步驟進度 + 漸進式 Markdown。
-8. 完成後可一鍵複製。
+## 鎖定決定
+| 項目 | 值 |
+|---|---|
+| 框架 | TypeScript + React + WXT + MV3 |
+| UI 風格 | 極簡黑白、圓角、現代、乾淨、留白 |
+| 版面/流程 | **雙階段**：設定頁（自動擷取卡 + 設定 + 開始）→ 結果頁（步驟進度 + 串流 Markdown + 複製 + 返回）|
+| 擷取時機 | 開 panel 即自動擷取當前頁，唯讀呈現；按「開始」才送後端 |
+| 擷取可編輯 | 否（唯讀預覽；手動貼上/編輯留 Phase 2）|
+| Auth | App 層：`launchWebAuthFlow` 取 Google ID token（aud=OAuth client_id），後端驗 簽章+client_id+email allowlist；Cloud Run IAM 開 unauth |
+| 初版切片 | Side Panel + **YouTube + 通用 article** 擷取器 + SSE 串流 + 複製；對本地後端跑通 |
+| 延後(Phase 2) | Coursera 擷取、手動貼上/可編輯、auth 正式化、多 provider UI、popup fallback、深色模式 |
 
-### 1.2 功能清單
-- **Side Panel 選單**
-  - 網站類別：自動偵測 + 下拉覆寫（article / book / podcast / youtube / coursera）。
-  - 方法論 (methodology) 下拉：選項由後端方法論清單提供。
-  - 筆記方向：自由文字。
-  - 額外需求：自由文字 textarea。
-  - Provider / model 選擇：預設 Gemini，可改 OpenAI / Claude。
-  - 查證上網 toggle：預設關。
-  - 處理按鈕。
-- **內容萃取**（瀏覽器端）
-  - article extractor：抽主要內文 + 頁內 transcript。
-  - youtube extractor：取字幕 / transcript。
-  - coursera extractor：取課程 transcript。
-  - 萃取失敗 → 顯示錯誤 + 「手動貼上內文」fallback。
-- **串流呈現**：消費 SSE，逐步渲染 Markdown，顯示目前步驟。
-- **一鍵複製**：複製最終 Markdown。
+> ⚠️ **跨端協調項（必處理）**：App 層認證 = 後端 audience 從 `cloud_run_service_url` 改為 **OAuth client_id**，且 Cloud Run 改 `--allow-unauthenticated`（保護改為純 app 層 token+allowlist）。牴觸後端 Phase A 現況（驗 aud=service URL + K_SERVICE 護欄假設 IAM 認證）。已列入後端 Phase B；extension 實作前需先對齊。
 
-## 2. 設計如何滿足 (How the Design Satisfies)
+## Objective
+在學習頁面（初版：YouTube、一般文章類網頁）一鍵把內文/transcript 擷取出來，於 Side Panel 確認後送後端生成結構化 Markdown 筆記，逐步串流呈現並一鍵複製。
 
-### 2.1 專案結構（WXT + MV3）
-- `entrypoints/background.ts` — service worker：
-  - 處理 action click → 開啟 Side Panel。
-  - 用 `chrome.identity` 取得 Google ID token（audience = Cloud Run URL）。
-  - 對後端發起 `/notes/stream` 的 SSE fetch。
-  - 把 `step` / `delta` / `citations` / `done` / `error` 事件轉送到 Side Panel。
-- `entrypoints/sidepanel/` — UI（選單、串流 Markdown 呈現、複製按鈕）。
-- `entrypoints/content/` — dispatcher 依 URL 選擇 extractor：
-  - **article extractor**：Readability 風格抽取主要內文 + 頁內 transcript。
-  - **youtube extractor**：解析 `ytInitialPlayerResponse` 取 caption track，於頁面 context 抓取字幕資料。
-  - **coursera extractor**：從 DOM / onDemand 介面讀取 transcript（使用者登入 session）。
-  - 回傳 `{ title, url, text, metadata }`。
+## Scope（切片）
+**做**：Side Panel React UI（雙階段）、自動擷取（article + youtube）、唯讀擷取預覽、方法論/模式/方向/查證設定、SSE 串流呈現、一鍵複製、auth（取 ID token 附於請求）。
+**Phase 2**：Coursera 擷取器、擷取內容可編輯 + 手動貼上 fallback、provider/model 選擇 UI、深色模式、popup fallback。
 
-### 2.2 訊息流
-```
-Side Panel ──(extract request)──▶ Background ──▶ Content Script
-Content Script ──({title,url,text,metadata})──▶ Background ──▶ Side Panel
-Background ──(POST /notes/stream, ID token, SSE)──▶ Backend
-Backend ──(SSE: step/delta/citations/done/error)──▶ Background ──▶ Side Panel
-```
-- 採用 `chrome.runtime` messaging；SSE 連線由 background 持有。
-
-### 2.3 請求格式（送往後端）
-```jsonc
-{
-  "category": "youtube",
-  "methodology_id": "...",
-  "direction": "...",
-  "extra_requirements": "...",
-  "provider": "gemini",        // gemini | openai | claude
-  "model": "gemini-3.5-flash",
-  "web_search": false,
-  "content": { "title": "", "url": "", "text": "", "metadata": {} }
-}
+## Visual Design Language（黑白圓角現代）
+```yaml
+palette:
+  bg:         "#FFFFFF"
+  surface:    "#FAFAFA"      # 卡片底
+  border:     "#E5E5E5"
+  text:       "#0A0A0A"
+  muted:      "#737373"      # 次要文字（灰階）
+  primary:    "#0A0A0A"      # 主要按鈕＝黑底白字
+  on_primary: "#FFFFFF"
+radius:
+  card: 16px
+  control: 10px
+  pill: 9999px               # 模式 toggle / 標籤
+type:
+  font: "system-ui, -apple-system, 'Noto Sans TC', sans-serif"
+  scale: { title: "16px/600", body: "14px/400", caption: "12px/400" }
+spacing: [4, 8, 12, 16, 24]  # px scale
+principles: 大量留白、單一強調色(黑)、細邊框、無/極淺陰影、圓角一致
 ```
 
-## 3. 邊界 (Boundaries)
-- **只做**：內容萃取 + UI + 串流呈現 + 複製。
-- **不做**：任何 AI / prompt 組裝 / LLM 呼叫；不直接呼叫任何 vendor API。
-- **不做**：STT / 音訊轉錄（只處理頁面上現成的 transcript）。
-- **唯一對外通道**：後端 `POST /notes/stream`。
-- 不持久化筆記（一鍵複製即完成）。
+## UX Flow（雙階段狀態機）
+```
+open panel
+  → [extracting] 自動向 content script 要擷取結果（skeleton/「擷取中…」）
+  → [ready]      擷取卡(唯讀:標題/類別badge/字數/內文預覽) + 設定 + 啟用「開始」
+                 (擷取失敗 → [extract_error] 可操作錯誤；切片無手動貼上，提示重整/換頁)
+  → 按「開始」 → [streaming] 切到結果頁：步驟進度 + 逐字串流 Markdown
+  → [done] 完整筆記 + 啟用「複製」；「返回」回設定頁
+  → 串流中 error 事件 → [stream_error] 錯誤 + 保留已串內容 + 可重試
+```
+**設定頁**：擷取卡（標題、類別 pill、字數、可捲內文預覽）→ 方法論下拉 → 模式 (精簡)(詳細) pill toggle → 方向輸入 → 查證上網 switch → 黑底「▶ 開始處理」大鈕。
+**結果頁**：頂部「‹ 返回」+ 5 步進度點（整理·草稿·補充·查證·成稿）+「⧉ 複製」；下方串流 Markdown。
 
-## 4. 注意事項 (Caveats)
-- **YouTube**：timedtext 為非官方端點且不穩；雲端 IP 會被封鎖——因此**必須在瀏覽器端、頁面 context、用使用者 session** 取字幕，後端不碰。優先讀 `ytInitialPlayerResponse` 的 caption track。
-- **Coursera**：transcript 需登入 session/cookie；只能在使用者已登入的分頁內取得。
-- **Brave / Side Panel**：Brave 為 Chromium 內核，支援 `chrome.sidePanel`；若偵測不到 API，fallback 到 popup。
-- **MV3 service worker 生命週期**：SW 會被回收；SSE 連線需在 SW 內妥善管理，並考慮連線中斷時保留已收到的部分內容。
-- **ID token 快取**：避免每次請求都重新授權；token 過期再刷新。
-- **權限最小化**：`host_permissions` 僅涵蓋必要網域（YouTube / Coursera / `<all_urls>` 視 article extractor 需求權衡）。
-- **萃取健壯性**：DOM 結構會變動；extractor 需對缺失節點容錯，失敗時走手動貼上 fallback 而非整體失敗。
+## Architecture（WXT + MV3）
+```
+extension/
+  wxt.config.ts                 # manifest、permissions、sidePanel、host_permissions
+  entrypoints/
+    background.ts               # SW：開 side panel；取 ID token；對後端 SSE fetch；轉送事件
+    sidepanel/
+      index.html
+      main.tsx                  # React 掛載
+      App.tsx                   # 雙階段路由(setup/result) + 狀態機
+      components/
+        ExtractCard.tsx         # 唯讀擷取卡
+        SettingsForm.tsx        # 方法論/模式/方向/查證
+        StepProgress.tsx        # 5 步進度
+        MarkdownView.tsx        # 串流 Markdown 呈現
+        CopyButton.tsx
+      lib/
+        api.ts                  # /methodologies、/notes/stream(SSE 消費)
+        messaging.ts            # 與 background/content 的型別化訊息
+        types.ts                # 跨端型別（NoteRequest、SSE 事件、ExtractResult）
+      styles/tokens.css         # 設計 tokens
+    content/
+      index.ts                  # dispatcher：依 URL 選擇擷取器，回 ExtractResult
+      extractors/
+        article.ts              # @mozilla/readability 抽主要內文
+        youtube.ts              # captionTracks json3（MAIN world）+ DOM 面板 fallback
+      world-main.ts             # 注入 MAIN world 讀 ytInitialPlayerResponse
+  tests/
+    extractors/                 # HTML fixtures 單元測試
+    lib/                        # SSE 解析、messaging
+    components/                 # @testing-library/react
+```
+
+## Messaging Contract（型別化）
+```yaml
+panel → background:               { type: "EXTRACT" }              # 開 panel 時
+background → content(active tab): { type: "EXTRACT" }
+content → background → panel:     { type: "EXTRACT_RESULT", payload: ExtractResult }
+ExtractResult:
+  ok: bool
+  category: "youtube" | "article"
+  content: { title: string, url: string, text: string, metadata: object|null }
+  error: { code: string, message: string } | null
+panel → background:  { type: "PROCESS", payload: NoteRequest }     # 按開始
+background → panel:  { type: "SSE", event: "step|delta|citations|done|error", data: object }
+```
+- background 持有對後端的 SSE fetch；串流期間以 port 保持 panel 連線（MV3 SW 生命週期下）；斷線→ error 並保留已收內容。
+- `NoteRequest` / SSE 事件型別與 [`backend-spec.md`](backend-spec.md) 跨端契約一致，不可單方更動。
+
+## Auth Flow（App 層）
+- `chrome.identity.launchWebAuthFlow`：Web OAuth client，`response_type=id_token`、`scope=openid email`，取得 Google **ID token**（`aud = OAuth client_id`）。
+- `/notes/stream`、`/methodologies` 請求帶 `Authorization: Bearer <id_token>`。
+- token 快取於記憶體 + `chrome.storage.session`；過期(401)觸發重新授權。
+- **後端對齊（協調項）**：驗 `aud == client_id`（非 service URL）；Cloud Run `--allow-unauthenticated`。
+
+## Extraction Methods
+```yaml
+article:
+  lib: "@mozilla/readability"          # 對 document clone 跑，取 title + textContent（去導覽/廣告）
+youtube:
+  primary:
+    - 於 MAIN world 讀 window.ytInitialPlayerResponse
+    - captions.playerCaptionsTracklistRenderer.captionTracks[] 取 baseUrl
+    - fetch(baseUrl + "&fmt=json3")（頁面 session/IP）→ 串接 segments 成 transcript
+  fallback:
+    - baseUrl 含 &exp=xpe 或回空 body → 改抓已渲染的「Show transcript」面板 DOM segments
+  metadata: { title, channel, videoId, lang }
+```
+> **注意事項**：(a) `&exp=xpe`(PoToken) 會讓 timedtext 回空 → 必須有 DOM 面板 fallback；(b) `ytInitialPlayerResponse` 在 MAIN world，content script 預設 isolated → 用 WXT `world:"MAIN"` 注入或解析頁面 script；(c) 兩路徑皆失敗 → `extract_error`（切片不做手動貼上，提示使用者開啟字幕面板後重試）。
+
+## SSE Consumption（`lib/api.ts`）
+- 用 `fetch` + `ReadableStream` reader 解析 `text/event-stream`（非 `EventSource`，因需帶 `Authorization` header 與 POST body）。
+- 逐塊解析 `event:` / `data:`，分派 step/delta/citations/done/error；delta 累加進 `MarkdownView`；done 設最終文字並啟用複製。
+
+## Versioned Dependencies（實作時再確認）
+```yaml
+node: ">=20"
+deps:
+  wxt: latest-stable
+  react: "^19"             # 再確認
+  react-dom: "^19"
+  "@mozilla/readability": latest-stable
+  marked OR markdown-it: latest-stable   # Markdown→HTML 呈現（擇一）
+dev:
+  typescript, vitest, "@testing-library/react", "@types/chrome"
+```
+
+## Testing Strategy
+- **Extractors**：對存檔 HTML fixtures 單元測試——YouTube（正常 json3、`exp=xpe` → DOM fallback）、article（Readability）。
+- **lib/api SSE 解析**：對 mock event-stream 驗證 step/delta/done/error 分派與 delta 累加。
+- **messaging**：型別化訊息 round-trip。
+- **元件**：StepProgress / MarkdownView / ExtractCard render 測試（@testing-library/react + vitest）。
+- **E2E（手動）**：Brave 載入未封裝 build，對真實 YouTube + 文章頁，開 panel→自動擷取→開始→串流→複製，對本地後端跑通。
+
+## Boundaries
+- 只做擷取 + UI + 串流呈現 + 複製；不做 AI、不直接呼叫任何 LLM vendor。
+- 不做 STT、不持久化筆記。
+- 唯一對外：後端 `/notes/stream`、`/methodologies`。
+- 初版只 youtube + article；Coursera / 可編輯 / 多 provider UI 延後。
