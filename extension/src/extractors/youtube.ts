@@ -14,6 +14,6 @@ export function parseJson3(json: any): string {
     .trim();
 }
 export function parsePanelDom(doc: Document): string {
-  const segs = Array.from(doc.querySelectorAll("ytd-transcript-segment-renderer .segment-text, .ytd-transcript-segment-renderer"));
-  return segs.map((n) => (n.textContent ?? "").trim()).filter(Boolean).join(" ").trim();
+  const segs = Array.from(doc.querySelectorAll(".segment-text"));
+  return segs.map(n => (n.textContent ?? "").trim()).filter(Boolean).join(" ").trim();
 }
