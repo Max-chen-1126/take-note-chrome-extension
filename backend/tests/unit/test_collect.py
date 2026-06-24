@@ -18,3 +18,13 @@ def test_truncates_only_when_extreme(monkeypatch):
     out = build_source(Content(text="a" * 5000))
     assert "省略" in out
     assert len(out) < 5000
+
+
+def test_truncation_shorter_than_original_near_threshold(monkeypatch):
+    monkeypatch.setenv("MAX_CONTENT_CHARS", "1000")
+    cfg.get_settings.cache_clear()
+    text = "a" * 1001                      # only 1 char over the cap
+    out = build_source(Content(text=text))
+    assert "省略" in out
+    assert len(out) < len(text)            # truncated must be shorter than original
+    assert len(out) <= 1000                # and within the cap

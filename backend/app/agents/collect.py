@@ -8,9 +8,10 @@ def build_source(content: Content) -> str:
     text = content.text.strip()
     cap = get_settings().max_content_chars
     if len(text) > cap:
-        head = int(cap * 0.7)
-        tail = cap - head
-        text = text[:head] + _OMITTED + text[-tail:]
+        budget = max(0, cap - len(_OMITTED))
+        head = int(budget * 0.7)
+        tail = budget - head
+        text = text[:head] + _OMITTED + (text[-tail:] if tail else "")
     parts = []
     if content.title:
         parts.append(f"# {content.title}")
