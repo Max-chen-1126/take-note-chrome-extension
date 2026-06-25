@@ -125,6 +125,36 @@ describe("getIdToken", () => {
     expect(token).toBeNull();
     expect(storage.set).not.toHaveBeenCalled();
   });
+
+  it("returns null without launching the interactive flow when WXT_OAUTH_CLIENT_ID is empty/unset", async () => {
+    const storage = makeStorage();
+    const launchWebAuthFlow = vi.fn<LaunchWebAuthFlowFn>(async () => undefined);
+
+    const token = await getIdToken({
+      env: { WXT_DEV_BEARER: "", WXT_OAUTH_CLIENT_ID: "" },
+      storage,
+      launchWebAuthFlow,
+      ...testHarnessDeps,
+    });
+
+    expect(token).toBeNull();
+    expect(launchWebAuthFlow).not.toHaveBeenCalled();
+  });
+
+  it("returns null without launching the interactive flow when WXT_OAUTH_CLIENT_ID is undefined", async () => {
+    const storage = makeStorage();
+    const launchWebAuthFlow = vi.fn<LaunchWebAuthFlowFn>(async () => undefined);
+
+    const token = await getIdToken({
+      env: { WXT_DEV_BEARER: "" },
+      storage,
+      launchWebAuthFlow,
+      ...testHarnessDeps,
+    });
+
+    expect(token).toBeNull();
+    expect(launchWebAuthFlow).not.toHaveBeenCalled();
+  });
 });
 
 describe("clearToken", () => {

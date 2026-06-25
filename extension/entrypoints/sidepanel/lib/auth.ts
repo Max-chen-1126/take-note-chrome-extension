@@ -140,7 +140,10 @@ async function writeCache(deps: Pick<AuthDeps, "storage">, token: string, expire
  *
  * Order: dev bearer (env) → session cache (if unexpired) → interactive
  * launchWebAuthFlow (caches the result). Returns null if no token could be
- * obtained (e.g. the user cancels the interactive flow).
+ * obtained (e.g. the user cancels the interactive flow, or no OAuth
+ * client_id is configured — launchWebAuthFlow is never invoked in that
+ * case, since Google would otherwise show a broken "missing client_id"
+ * popup).
  *
  * `partialDeps` lets tests override env/storage/launchWebAuthFlow without a
  * real browser; production callers should call `getIdToken()` with no args.
@@ -154,6 +157,8 @@ export async function getIdToken(partialDeps?: Partial<AuthDeps>): Promise<strin
   if (cached) return cached;
 
   const clientId = deps.env.WXT_OAUTH_CLIENT_ID ?? "";
+  if (!clientId) return null;
+
   const authUrl = buildAuthUrl(clientId, deps.getRedirectURL(), deps.randomNonce());
   const redirectUrl = await deps.launchWebAuthFlow({ url: authUrl, interactive: true });
   const idToken = parseIdTokenFromRedirect(redirectUrl);
