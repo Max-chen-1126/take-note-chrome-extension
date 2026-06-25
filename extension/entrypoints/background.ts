@@ -104,7 +104,13 @@ export async function handleExtract(): Promise<Msg> {
  * forwards each SseEvent back over the port as {type:"SSE", payload}.
  * Closes the port once the stream completes (done/error) or throws.
  */
-function handleProcessPort(port: chrome.runtime.Port) {
+export function handleProcessPort(port: chrome.runtime.Port) {
+  // Abort the downstream /notes/stream fetch if the panel closes mid-stream,
+  // so we stop consuming (billable) LLM tokens and don't leak a running loop.
+  const controller = new AbortController();
+  const onDisconnect = () => controller.abort();
+  port.onDisconnect.addListener(onDisconnect);
+
   const onMessage = (message: unknown) => {
     const msg = message as Msg;
     if (msg?.type !== "PROCESS") return;
@@ -113,11 +119,12 @@ function handleProcessPort(port: chrome.runtime.Port) {
     (async () => {
       try {
         const token = await getIdToken();
-        for await (const event of streamNotes(BACKEND_URL, token, msg.payload)) {
+        for await (const event of streamNotes(BACKEND_URL, token, msg.payload, controller.signal)) {
           port.postMessage({ type: "SSE", payload: event } satisfies Msg);
           if (event.event === "done" || event.event === "error") break;
         }
       } catch (err) {
+        if (controller.signal.aborted) return; // panel closed → expected abort, stay quiet
         const errorEvent: SseEvent = {
           event: "error",
           data: { code: "stream_failed", message: err instanceof Error ? err.message : String(err) },
@@ -128,6 +135,7 @@ function handleProcessPort(port: chrome.runtime.Port) {
           // port already disconnected on the panel side; nothing more to do
         }
       } finally {
+        port.onDisconnect.removeListener(onDisconnect);
         try {
           port.disconnect();
         } catch {

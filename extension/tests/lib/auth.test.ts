@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { getIdToken, clearToken } from "../../entrypoints/sidepanel/lib/auth";
+import { getIdToken, clearToken, base64UrlDecode } from "../../entrypoints/sidepanel/lib/auth";
 import type { LaunchWebAuthFlowFn } from "../../entrypoints/sidepanel/lib/auth";
+
+it("base64UrlDecode handles UTF-8 multibyte payloads (no mojibake)", () => {
+  const s = "陳大文 José";
+  const b64url = btoa(String.fromCharCode(...new TextEncoder().encode(s)))
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  expect(base64UrlDecode(b64url)).toBe(s);
+});
 
 // A minimal valid-looking JWT: header.payload.signature (base64url), payload carries `exp`.
 function fakeJwt(expSecondsFromNow: number): string {

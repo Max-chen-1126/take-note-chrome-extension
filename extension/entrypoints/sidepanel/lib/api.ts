@@ -1,11 +1,12 @@
 import type { SseEvent, NoteRequest } from "./types";
 
 export function parseSseChunk(buffer:string):{events:SseEvent[];rest:string}{
-  const events:SseEvent[]=[]; const blocks=buffer.split("\n\n");
+  // SSE frames may be delimited by LF or CRLF; tolerate both (\r\n proxies/Cloud Run).
+  const events:SseEvent[]=[]; const blocks=buffer.split(/\r?\n\r?\n/);
   const rest=blocks.pop() ?? "";
   for(const b of blocks){
     let ev=""; let data="";
-    for(const line of b.split("\n")){
+    for(const line of b.split(/\r?\n/)){
       if(line.startsWith("event:")) ev=line.slice(6).trim();
       else if(line.startsWith("data:")) data+=line.slice(5).trim();
     }
@@ -17,10 +18,10 @@ export function parseSseChunk(buffer:string):{events:SseEvent[];rest:string}{
   return { events, rest };
 }
 
-export async function* streamNotes(baseUrl:string, token:string|null, body:NoteRequest):AsyncGenerator<SseEvent>{
+export async function* streamNotes(baseUrl:string, token:string|null, body:NoteRequest, signal?:AbortSignal):AsyncGenerator<SseEvent>{
   const res=await fetch(`${baseUrl}/notes/stream`,{ method:"POST",
     headers:{ "Content-Type":"application/json", ...(token?{Authorization:`Bearer ${token}`}:{}) },
-    body:JSON.stringify(body) });
+    body:JSON.stringify(body), signal });
   if(!res.ok || !res.body){ yield { event:"error", data:{ code:`http_${res.status}`, message:await res.text() }}; return; }
   const reader=res.body.getReader(); const dec=new TextDecoder(); let buf="";
   for(;;){ const {done,value}=await reader.read(); if(done) break;

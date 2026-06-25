@@ -105,10 +105,15 @@ function parseIdTokenFromRedirect(redirectUrl: string | undefined): string | nul
   return params.get("id_token");
 }
 
-function base64UrlDecode(input: string): string {
+export function base64UrlDecode(input: string): string {
   const padded = input.replace(/-/g, "+").replace(/_/g, "/");
   const pad = padded.length % 4 === 0 ? "" : "=".repeat(4 - (padded.length % 4));
-  return atob(padded + pad);
+  const binary = atob(padded + pad);
+  // atob yields a binary (Latin-1) string; reinterpret the bytes as UTF-8 so
+  // non-ASCII JWT claims (e.g. a Chinese name) decode correctly instead of mojibake.
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
 }
 
 /** Derives an expiry (epoch ms) from the JWT `exp` claim; falls back to a conservative default. */

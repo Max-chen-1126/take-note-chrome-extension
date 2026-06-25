@@ -1,7 +1,26 @@
 import { it, expect, vi, afterEach } from "vitest";
-import { handleExtract } from "../../entrypoints/background";
+
+vi.mock("../../entrypoints/sidepanel/lib/api", () => ({ streamNotes: vi.fn(), getMethodologies: vi.fn() }));
+vi.mock("../../entrypoints/sidepanel/lib/auth", () => ({ getIdToken: vi.fn(async () => null), clearToken: vi.fn() }));
+
+import { handleExtract, handleProcessPort } from "../../entrypoints/background";
+import { streamNotes } from "../../entrypoints/sidepanel/lib/api";
 
 const realChrome = globalThis.chrome;
+
+type Listener = (arg?: unknown) => void;
+function makeFakePort() {
+  const msg: Listener[] = [];
+  const disc: Listener[] = [];
+  return {
+    onMessage: { addListener: (f: Listener) => msg.push(f), removeListener: () => {} },
+    onDisconnect: { addListener: (f: Listener) => disc.push(f), removeListener: () => {} },
+    postMessage: vi.fn(),
+    disconnect: vi.fn(),
+    _emitMessage: (m: unknown) => msg.forEach((f) => f(m)),
+    _emitDisconnect: () => disc.forEach((f) => f()),
+  };
+}
 
 afterEach(() => {
   globalThis.chrome = realChrome;
@@ -166,4 +185,34 @@ it("resolves a zh-TW extract_failed ExtractResult when injection itself fails (e
   expect(result.payload.error?.message).toContain("此頁面無法擷取");
   // Only the initial attempt — no retry after a failed injection.
   expect(sendMessage).toHaveBeenCalledTimes(1);
+});
+
+it("aborts the downstream /notes/stream fetch when the panel port disconnects", async () => {
+  let capturedSignal: AbortSignal | undefined;
+  (streamNotes as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+    // eslint-disable-next-line require-yield
+    async function* (_u: unknown, _t: unknown, _b: unknown, signal: AbortSignal) {
+      capturedSignal = signal;
+      yield { event: "step", data: { step: "structure", status: "start", summary: null } };
+      await new Promise(() => {}); // hang mid-stream, simulating an in-flight LLM stream
+    },
+  );
+
+  const port = makeFakePort();
+  handleProcessPort(port as unknown as chrome.runtime.Port);
+  port._emitMessage({
+    type: "PROCESS",
+    payload: {
+      category: "youtube", methodology_id: "m", mode: "concise", direction: "",
+      web_search: false, provider: "gemini",
+      content: { title: "", url: "", text: "x", metadata: null },
+    },
+  });
+  await new Promise((r) => setTimeout(r, 0)); // let the async loop reach the first yield
+
+  expect(capturedSignal).toBeDefined();
+  expect(capturedSignal!.aborted).toBe(false);
+
+  port._emitDisconnect(); // user closes the side panel
+  expect(capturedSignal!.aborted).toBe(true);
 });
