@@ -71,8 +71,10 @@ async def run_pipeline(req: NoteRequest, methodology, settings) -> AsyncIterator
                     yield sse("citations", {"items": items})
             if author == "step_format":
                 text = ""
-                if getattr(event, "content", None) and event.content.parts:
-                    text = "".join(p.text or "" for p in event.content.parts)
+                content = getattr(event, "content", None)
+                parts = getattr(content, "parts", None)
+                if parts:
+                    text = "".join(getattr(p, "text", None) or "" for p in parts)
                 if getattr(event, "partial", False) and text:
                     yield sse("delta", {"text": text})
                 elif event.is_final_response() and text:

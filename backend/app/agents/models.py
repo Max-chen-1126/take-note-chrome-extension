@@ -18,7 +18,11 @@ def build_model(provider: Provider, model_id: str | None) -> str:
 
 
 def generate_config(provider: Provider) -> dict:
-    """effort=High 對映。⚠️ 參數名實作時對 ADK/Gemini 文件確認。"""
+    """effort=High 對映。⚠️ 參數名實作時對 ADK/Gemini 文件確認。
+
+    TODO(Phase B): 目前尚未接線——Task 9 刻意延後將此設定掛到 LlmAgent 的
+    generate_content_config。保留供 Phase B effort=High 整合使用，非 dead code。
+    """
     if provider is Provider.gemini:
         return {"thinking_config": {"thinking_budget": -1}}  # -1 = 動態最高
     return {}

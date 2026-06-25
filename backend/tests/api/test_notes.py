@@ -40,3 +40,24 @@ async def test_happy_path_event_order(monkeypatch):
     assert "event: delta" in body
     assert "event: done" in body
     assert body.index("event: step") < body.index("event: done")
+
+
+@pytest.mark.asyncio
+async def test_format_event_without_parts_does_not_crash(monkeypatch):
+    # A format event whose `content` has no `parts` attribute must not raise
+    # AttributeError (defensive getattr); the stream should still finish cleanly.
+    methodology = {"categories": ["youtube"],
+                   "steps": {s: {"enabled": True, "instruction": {"concise": s}}
+                             for s in ["structure", "draft", "augment", "verify", "format"]}}
+
+    async def fake_events():
+        from types import SimpleNamespace as N
+        yield N(author="step_format", partial=True, content=N(),  # no .parts
+                grounding_metadata=None, is_final_response=lambda: False)
+        yield N(author="step_format", partial=False, content=N(parts=[N(text="# ok")]),
+                grounding_metadata=None, is_final_response=lambda: True)
+
+    monkeypatch.setattr(notes, "_drive_adk", lambda *a, **k: fake_events())
+    body = "".join([c async for c in notes.run_pipeline(_req(), methodology, notes.get_settings())])
+    assert "provider_error" not in body
+    assert "event: done" in body

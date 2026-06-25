@@ -1,6 +1,24 @@
 import app.store.firestore as store
 
 
+def test_client_factory_reuses_single_instance(monkeypatch):
+    store._client = None
+    calls = {"n": 0}
+
+    class FakeClient:
+        def __init__(self, *a, **k):
+            calls["n"] += 1
+
+    monkeypatch.setattr(store.firestore, "Client", FakeClient)
+    try:
+        c1 = store.client_factory()
+        c2 = store.client_factory()
+        assert c1 is c2          # reused, not re-instantiated
+        assert calls["n"] == 1   # constructed exactly once across calls
+    finally:
+        store._client = None     # don't leak the fake into other tests
+
+
 class _Doc:
     def __init__(self, exists, data, _id="m1"):
         self.exists, self._data, self.id = exists, data, _id

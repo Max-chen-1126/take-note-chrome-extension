@@ -5,10 +5,16 @@ from google.cloud import firestore
 from app.core.config import get_settings
 
 _cache: dict[str, tuple[float, dict]] = {}
+_client: firestore.Client | None = None
 
 
 def client_factory() -> firestore.Client:
-    return firestore.Client(project=get_settings().google_cloud_project)
+    # Reuse a single thread-safe firestore.Client; constructing one per call
+    # re-initializes gRPC channels + credentials and adds latency.
+    global _client
+    if _client is None:
+        _client = firestore.Client(project=get_settings().google_cloud_project)
+    return _client
 
 
 def clear_cache() -> None:
