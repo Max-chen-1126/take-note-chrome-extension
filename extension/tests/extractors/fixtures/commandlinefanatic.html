@@ -1,0 +1,761 @@
+<html><head><link href="/rss.xml" rel="alternate" type="application/rss+xml" title="RSS" /><link href="/style.css" rel="stylesheet" type="text/css" /><title>Understanding CRC32</title><script src='https://www.google.com/recaptcha/api.js'></script><script type="text/javascript" src="/comments.js" /><script type="text/javascript" src="/jooscript.js" /><script type="text/javascript" src="/fxcanvas.js" /><!--[if IE]><script type="text/javascript" src="/flash_backend.js"></script><![endif]--><script type="text/javascript" src="/flash_backend.js"></script><!--<comment><script type="text/javascript" src="/canvas_backend.js"></script></comment>--><script type="text/javascript" src="/canvas_backend.js"></script><script language='javascript'>function validate(target)  {  if ( target.name.value === '' )  {    target.name.style.border = '3px solid red';    target.name.nextSibling.style.display = 'inline';    return false;  }  if ( target.comment.value === '' )  {    target.comment.style.border = '3px solid red';    target.comment.nextSibling.style.display = 'inline';    return false;  }  return true;}</script></head><body id="articles"><div id="banner"><h1>Command Line Fanatic</h1><p>A blog about technology, protocols, security, details and fanaticism</p></div><table><tr><td width="80%" valign=top><div id="menu"><span id="home"><a href="/cgi-bin/showpage.cgi?page=home">Home</a><span>&nbsp;<span id="articles"><a href="/cgi-bin/showpage.cgi?page=articles">Posts</a><span>&nbsp;<span id="implementingssl"><a href="/cgi-bin/showpage.cgi?page=implementingssl">Books</a><span>&nbsp;<span id="aboutme"><a href="/cgi-bin/showpage.cgi?page=aboutme">About Me</a><span>&nbsp;<span id="rss"><a href="/rss.xml">RSS</a></span></div><div id="main"><h1>Understanding CRC32</h1>
+<p>
+Although storage space is cheap and getting cheaper, there's still a legitimate
+need to compress data when stored in a computer.  Data compression is always
+a speed/space trade-off; when you compress, you use less space, but you incur
+a compression cost at storage time and a decompression cost at extraction time.
+A slightly less obvious consequence of data compression is the removal of
+redundancy &mdash; this is, after all, the point of compression in the first place.
+</p>
+<p>
+The problem with removing redundancy is that even a minor corruption can be
+catastrophic.  In computer document terms, flipping a single bit within a
+compressed document can render the entire document meaningless.  Uncompressed
+data doesn't ordinarily suffer from this problem; a corruption of a single data
+element (say, a character in a text document) corrupts that data element but
+leaves the others alone.  The nature of compression aims to make all the
+elements interdependent which does a good job of saving space but a bad
+job of error recovery.
+</p>
+<p>
+The only way to deal with this is to add redundancy.  As such, file compression
+and error recovery are actually opposing goals &mdash; however, when adding
+redundancy for the purposes of error recovery, the user can decide just how
+much redundancy is acceptable.  At one end of the spectrum are what are called
+<i>parity files</i> which aim to pinpoint exactly where an error occurred - if the
+error checking routine knows which bit(s) are in error, they can be flipped
+automatically, permitting the original document to be seamlessly recovered.
+At the other end of the spectrum are <i>check values</i>, which just notify
+the receiver as to whether or not the document as a whole is correct.  When
+check values are used, an algorithm is applied to the contents of the original
+document and the result is stored with the document itself.  After decompression,
+the same algorithm is applied to the decompressed data and compared to the
+check value &mdash; if they don't match, an error has occurred, although there's
+no indication of where.
+<p>Check values
+can be fairly useful in situations where either the cost of recovering the
+original through other means is relatively cheap (e.g. asking the sender to
+re-send as in the case of a network transmission) or when space is at a
+premium and the risk of errors is low but not zero.
+Compressed files fall into the second category.  If a file is compressed and
+stored that way, it's probably not recoverable, through any means &mdash; but
+bit errors on disk are rare.  Still, if a file is decompressed incorrectly,
+the user needs to know immediately, since not all data files can be detected
+as incorrect by the user.  Raw data - say, of monthly sales numbers - may
+decompress into a valid, but wrong format.
+</p>
+<p>
+One of the simplest forms of a check value is the <i>checksum</i>.  The checksum
+is easy to compute.  A checksum just adds the data to be checked to a register,
+allowing it to overflow.  A simple 8-bit checksum routine is illustrated in
+listing 1.
+<p>
+<pre>
+unsigned char checksum( unsigned char *in, int len )
+{
+    unsigned char c = 0;
+    while ( len-- )
+    {
+      c += *(in++);
+    }
+    return c;
+}
+</pre>
+<div class="caption">Listing 1: 8-bit checksum</div>
+<p>
+So, the checksum of the input "abcd" would be ( 97 + 98 + 99 + 100 ) % 256 = 138.
+Nice, neat, simple.  The downside of the simple checksum is that there are
+a lot of errors it won't detect.  For example, checksum( "dbca" ) also = 138.
+Although it's improbable that a storage error would shuffle the bytes
+themselves around, a checksum will also not detect the difference between
+97, 98, 99, 100 ('a', 'b', 'c', 'd') and 96, 99, 99, 100 - and this is an
+entirely probable error scenario; I've just flipped the least significant
+bits of the first two elements.  Likewise, the completely corrupt 96, 99, 98,
+101 (all LSB's flipped) would checksum to the same value; 138.  As it turns
+out, there are a whole host of errors that can occur that a simple additive
+overflow checksum will not detect.
+</p>
+<h2>Cyclic Redundancy Checks</h2>
+<p>
+A more robust (but more complex) check value is the <i>Cyclic Redundancy
+Check (CRC)</i>.  In technical terms, the CRC is the "remainder of the polynomial
+division modulo 2 of the input".  That's quite a mouthful, so let's break
+that down.
+</p>
+<h3>Polynomial Operations</h3>
+<p>
+First, a polynomial is a function of a single variable which consists only of
+additions, multiplications and exponentiations.  The canonical representation
+of a polynomial is:
+<pre>
+c<sub>n</sub>x<sup>n</sup> + c<sub>n-1</sub>x<sup>n-1</sup> + c<sub>n-2</sub>x<sup>n-2</sup> + ... + c<sub>2</sub>x<sup>2</sup> + c<sub>1</sub>x + c<sub>0</sub>
+</pre>
+where c<sub>n</sub> are referred to as <i>coefficients</i> and each individual
+exponent marks off a <i>term</i>.  Thus,
+x<sup>5</sup> + 3x<sup>2</sup> + 2x + 5 is a polynomial, but sin(x)/cos(x) is
+not.  Polynomials can be meaningfully and easily added and subtracted to and 
+from one another; just add or subtract the coefficients of like terms.
+If a term appears in one polynomial but not the other, then it should be
+treated as having a coefficient of zero for that term.  In this sense, every
+polynomial actually encompasses every expoenent - just that most of them have
+coefficients of 0.
+</p>
+<p>
+Therefore, to say that 
+( 3x<sup>2</sup> + 2x + 5 ) +
+( 4x<sup>3</sup> + 5x<sup>2</sup> + 9x + 12 ) = 
+( 4x<sup>3</sup> + 8x<sup>2</sup> + 11x + 17 )
+is to say that if you take any number x (say, 3), and evaluate
+( 3(3)<sup>2</sup> + 2(3) + 5 ) = 27 + 6 + 5 = 38, 
+( 4(3)<sup>3</sup> + 5(3)<sup>2</sup> + 9(3) + 12 ) = 108 + 45 + 27 + 12 = 192,
+then 
+( 4(3)<sup>3</sup> + 8(3)<sup>2</sup> + 11(3) + 17 ) = 108 + 72 + 33 + 17 = 230 = 38 + 192,
+which it does.  This all follows intuitively from the nature of addition.
+</p>
+<p>
+Likewise, polynomials can be multiplied.  In this case, though, you don't
+combine like terms but instead multiply every combination of terms between the
+two polynomials by one another.  Since multiplying powers just adds 
+exponents (after all, x<sup>5</sup> * x<sup>2</sup> = xxxxx * xx = xxxxxxx),
+multiplying terms involves multiplying the coefficients and adding the exponents.
+This can work out to quite a few operations - one helpful way to keep track
+of them is to line them up, just as you probably learned to do with numerals
+in elementary school:
+</p>
+<pre>
+                4x<sup>3</sup> + 5x<sup>2</sup> +  9x + 12
+                 *    3x<sup>2</sup> +  2x +  5
+<hr width="30%" align="left"/>
+              20x<sup>3</sup> + 25x<sup>2</sup> + 45x + 60
+        8x<sup>4</sup> + 10x<sup>3</sup> + 18x<sup>2</sup> + 24x
+12x<sup>5</sup> + 15x<sup>4</sup> + 27x<sup>3</sup> + 36x<sup>2</sup>
+<hr width="30%" align="left"/>
+12x<sup>5</sup> + 23x<sup>4</sup> + 57x<sup>3</sup> + 79x<sup>2</sup> + 69x + 60
+</pre>
+<div class="caption">Example 1: Polynomial multiplication</div>
+<h3>Polynomial Division</h3>
+<p>
+Second, just as polynomials can be added, subtracted, and multiplied, they
+can also be divided.  This is easy enough to describe, although can be a bit
+tedious to carry out by hand - just invert the multiplication.
+</p>
+<!--
+<pre>
+                       3x<sup>2</sup> +  2x + 5
+                    +---------------------------------------
+4x<sup>3</sup> + 5x<sup>2</sup> + 9x + 12 | 12x<sup>5</sup> + 23x<sup>4</sup> + 57x<sup>3</sup> + 79x<sup>2</sup> + 69x + 60
+                    - 12x<sup>5</sup> + 15x<sup>4</sup> + 27x<sup>3</sup> + 36x<sup>2</sup>
+                              8x<sup>4</sup> + 30x<sup>3</sup> + 43x<sup>2</sup> + 69x
+                            - 8x<sup>4</sup> + 10x<sup>3</sup> + 18x<sup>2</sup> + 24x
+                                    20x<sup>3</sup> + 25x<sup>2</sup> + 45x + 60
+                                  - 20x<sup>3</sup> + 25x<sup>2</sup> + 45x + 60
+</pre>
+-->
+<img src="/art008f02.png" />
+<div class="caption">Example 2: Polyomial division</div>
+<p>
+Algorithmically, this means first dividing the left-most term of the
+divisor by the left-most term of the dividend.  Looking back at the multiplication
+in example 1, you can see why - the left-most term of the product is the
+product of the left-most terms of the multipliers.  Divide these to get the
+first term of the quotient, 3x<sup>2</sup>.  Now recover the last row of 
+the multiplication by multiplying 3x<sup>2</sup> by each term in the dividend:
+</p>
+<pre>
+12x<sup>5</sup> + 15x<sup>4</sup> + 27x<sup>3</sup> + 36x<sup>2</sup>
+</pre>
+<p>
+And subtract these terms from the divisor:
+</p>
+<pre>
+8x<sup>4</sup> + 10x<sup>3</sup> + 18x<sup>2</sup> + 24x
+</pre>
+<p>
+Now, divide the left-most term of the dividend by the new left-most term to
+get 2x; multiply out, subtract, and continue.  In this way, you've discovered
+a polynomial which can be multiplied by the dividend to yield the multiplier.
+</p>
+<p>
+This is tedious to do by hand and, being so algorithmic, cries out for a code
+solution.  Listing 2 illustrates a straightforward implementation of
+polynomial division in C.  Polynomials are stored as arrays of doubles; the
+position in the array implies the exponent.  Thus if array[2] = 3.0, then
+the coefficient of the x<sup>2</sup> term is 3.  This means that polynomials
+are stored "backwards", but makes the implementation a bit easier to follow.
+</p>
+<pre>
+int divide( double num[], int nlen,
+            double den[], int dlen,
+            double quotient[], int *qlen )
+{
+    int n, d, q;
+    // The lengths are one more than the last index; decrement them
+    // here so the call is less confusing
+    nlen--;
+    dlen--;
+    q = 0;
+    // when n > dlen, the result is no longer a polynomial
+    // (e.g. trying to divide x by x^2
+    for ( n = nlen; n >= dlen; n-- )
+    {
+      // First, divide the nth element of numerator with the last element
+      // of the denominator
+      quotient[ n - dlen ] = num[ n ] / den[ dlen ];
+      q++;
+      // Now, multiply each element of the denominator by each
+      // corresponding element of the numerator and subtract the
+      // result
+      for ( d = dlen; d >= 0; d-- )
+      {
+        num[ n - ( dlen - d ) ] -= den[ d ] * quotient[ n - dlen ];
+      }
+    }
+    *qlen = q;
+
+    return ( nlen - *qlen + 1 );
+}
+</pre>
+<div class="caption">Listing 2: Polynomial Division</div>
+<p>
+This routine, although far from perfect, illustrates polynomial division &mdash;
+I'm using the terms <i>num(erator)</i> and <i>den(ominator)</i> instead of
+<i>dividend</i> and <i>divisor</i> since they both start with divi, which
+would make the code a bit difficult to read.  The quotient is returned, along
+with its length, in the last two parameters.  This is meant to be called as 
+shown in listing 3.
+</p>
+<pre>
+  double num[] = { 60.0, 69.0, 79.0, 57.0, 23.0, 12.0 };
+  double den[] = { 12.0, 9.0, 5.0, 4.0 };
+  double quot[ 3 ];
+
+  q = sizeof( quot ) / sizeof( double );
+  divide( num, sizeof( num ) / sizeof( double ),
+          den, sizeof( den ) / sizeof( double ),
+          quot, &q );
+</pre>
+<div class="caption">Listing 3: Invoking divide</div>
+<p>
+(Recall when reading listing 3 that polynomials are stored "backwards").
+</p>
+<p>
+Just as when dividing integers, though, it's entirely possible to divide
+one polynomial by another one that doesn't divide evenly; if you do this,
+there's a <i>remainder</i> left over.  In the case of polynomial division,
+this is what's left over of the divisor after all of the subtraction operations
+have been successfully carried out.  This remainder is actually the point of
+interest for the CRC.  The polynomial division algorithm in listing 2 returns
+the remainder by modifying the numerator itself; the return value of the
+function is the length of the remainder.
+</p>
+<h3>Polynomial division modulo 2</h3>
+<p>
+Third, this polynomial division is carried out modulo 2.  What this means
+is that every coefficient should be divided by 2 and the remainder of this
+division used instead of the coefficient itself.  What this practically amounts
+to is that every coefficient must first either be 1 or 0, and the addition
+operation changes to:
+<table border="1px">
+<tr><th>a</th><th>b</th><th>a + b</th><th>( a + b ) % 2</th></tr>
+<tr><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><td>0</td><td>1</td><td>1</td><td>1</td></tr>
+<tr><td>1</td><td>0</td><td>1</td><td>1</td></tr>
+<tr><td>1</td><td>1</td><td>2</td><td>0</td></tr>
+</table>
+<div class="caption">Table 1: addition operation modulo 2</div>
+Similarly, subtraction becomes:
+<table border="1px">
+<tr><th>a</th><th>b</th><th>a - b</th><th>( a - b ) % 2</th></tr>
+<tr><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><td>0</td><td>1</td><td>-1</td><td>1</td></tr>
+<tr><td>1</td><td>0</td><td>1</td><td>1</td></tr>
+<tr><td>1</td><td>1</td><td>0</td><td>0</td></tr>
+</table>
+<div class="caption">Table 2: subtraction operation modulo 2</div>
+
+In other words, subtraction and addition are equivalent modulo 2.
+</p>
+<p>
+Changing the polynomial division routine in listing 2 to work modulo 2 requires
+only a one line change:
+<pre>
+      for ( d = dlen; d >= 0; d-- )
+      {
+        num[ n - ( dlen - d ) ] -= den[ d ] * quotient[ n - dlen ];
+<b>        num[ n - ( denlen - d ) ] = fabs( num[ n - ( denlen - d ) ] );</b>
+      }
+</pre>
+<div class="caption">Listing 4: Polynomial division modulo 2</div>
+</p>
+<p>
+And listing 4 is now a working CRC calculator.  To compute a CRC, turn the
+input into a very long polynomial by making each bit into a coefficient.  So,
+if the input was 20 bytes long, the highest order coefficient would be
+x<sup>20 * 8 = 160</sup>.  This is divided by a fixed polynomial and the
+remainder of this division is stored with the compressed result.  The 
+decompressor computes the remainder of the uncompressed data with the same
+fixed polynomial; if they match, then the data uncompressed correctly.
+</p>
+<p>
+The CRC is specifically designed to catch errors that a simple checksum won't.
+Specifically, depending on the structure of the fixed divisor, the CRC
+algorithm is particularly attuned to long strings of 1's or 0's inserted into
+an otherwise correct bitstream &mdash; these will be detected with high probability.  This is
+important, because this is exactly the sort of thing that tends to occur
+in noisy channels.
+</p>
+<p>
+The most common CRC divisor value is the CRC32 which is the polynomial
+x<sup>32</sup> + x<sup>26</sup> + x<sup>23</sup> + x<sup>22</sup> +
+x<sup>16</sup> + x<sup>12</sup> + x<sup>11</sup> + x<sup>10</sup> +
+x<sup>8</sup> + x<sup>7</sup> + x<sup>5</sup> + x<sup>4</sup> +
+x<sup>2</sup> + x + 1.  To compute the CRC32 of the input 'ABC', you
+would call it as shown in listing 5.
+</p>
+<pre>
+int q;
+double q32[ 32 ];
+double crc32[] = { 1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0,
+                   1.0, 0.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 
+                   1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0,
+                   0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0 };
+
+double ABC[] = { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, // C
+                 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, // B
+                 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0  // A
+               };
+
+r = divide_crc( ABC, sizeof( ABC ) / sizeof( double ),
+                crc32, sizeof( crc32 ) / sizeof( double ),
+                q32, &q );
+</pre>
+<div class="caption">Listing 5: CRC32 of 'ABC'</div>
+<p>
+Notice that I have to pad the 24-bit input with an additional 32 bits of
+zeros; otherwise, the remainder of the division operation would just be
+the CRC32 itself (and the quotient would be 0).  The binary values for
+A, B &amp; C (65, 66 &amp; 67) appear backwards here because (if you recall)
+the polynomial array is loaded "backwards" with the coefficient for x<sup>0</sup>
+in the first position.
+</p>
+<p>
+Example 3, below, illustrates the computation of the CRC32-value of "ABC".
+At each point in the division, the important piece is shown in bold; this is
+the current CRC32 &mdash; the remainder of the polynomial division.  The final value
+is 01011010010110110100001100111010, or 0x5A5B433A.  (This still doesn't match the
+official specification - I'll detail why, and correct this, in must a moment).
+</p>
+<!--
+<pre>
+                                    10000000001000101101
+                                  +---------------------------------------------------------
+100000100110000010001110110110111 | 10000010010000101100001000000000000000000000000000000000
+                                    0<b>00000000010001001001100110110111</b>00000000000000000000000
+                                    00<b>00000000100010010011001101101110</b>0000000000000000000000
+                                    000<b>00000001000100100110011011011100</b>000000000000000000000
+                                    0000<b>00000010001001001100110110111000</b>00000000000000000000
+                                    00000<b>00000100010010011001101101110000</b>0000000000000000000
+                                    000000<b>00001000100100110011011011100000</b>000000000000000000
+                                    0000000<b>00010001001001100110110111000000</b>00000000000000000
+                                    00000000<b>00100010010011001101101110000000</b>0000000000000000
+                                    000000000<b>01000100100110011011011100000000</b>000000000000000
+                                    0000000000<b>10001001001100110110111000000000</b>00000000000000
+                                    00000000000<b>00010110101001111100000110110111</b>0000000000000
+                                    000000000000<b>00101101010011111000001101101110</b>000000000000
+                                    0000000000000<b>01011010100111110000011011011100</b>00000000000
+                                    00000000000000<b>10110101001111100000110110111000</b>0000000000
+                                    000000000000000<b>01101110101111010000011011000111</b>000000000
+                                    0000000000000000<b>11011101011110100000110110001110</b>00000000
+                                    00000000000000000<b>10111110001101010000011010101011</b>0000000
+                                    000000000000000000<b>01111000101010110001000011100001</b>000000
+                                    0000000000000000000<b>11110001010101100010000111000010</b>00000
+                                    00000000000000000000<b>11100110011011010101111000110011</b>0000
+                                    000000000000000000000<b>11001000000110111010000111010001</b>000
+                                    0000000000000000000000<b>10010100111101100101111000010101</b>00
+                                    00000000000000000000000<b>00101101001011011010000110011101</b>0
+                                    000000000000000000000000<b>01011010010110110100001100111010</b>
+</pre>
+-->
+<img src="/art008f03.png" />
+<div class="caption">Example 3: CRC32 computation</div>
+<h2>Efficient CRC Computation</h2>
+<p>
+You're probably cringing
+at the amount of memory and time this straightforward implementation wastes -
+an array of doubles to hold ones and zeros?  I'm sure you've already spotted
+an obvious optimization: store the polynomials themselves as bits.  If you
+do this, you can make a further speed optimization &mdash; you likely noticed
+that tables 1 and 2 are actually the logic tables of the XOR operation, which
+can be carried out much faster by a microprocessor than subtraction operations.
+Since the quotient itself is not needed, there's no reason to store it &mdash;
+the only important part of the calculation is the remainder.  Listing 6 is
+a sleek, simple, streamlined implementation of the CRC calculation shown in
+listing 4.  The results are equivalent, but this implementation is much
+faster and memory efficient.
+</p>
+<pre>
+unsigned long int compute_crc( unsigned long input,
+                               int len,
+                               unsigned long divisor )
+{
+  while ( len-- )
+  {
+    input = ( input & 0x80000000 ) ? divisor ^ ( input << 1 ) : ( input << 1 );
+  }
+
+  return input;
+}
+
+...
+  unsigned long int crc32_divisor = 0x04C11DB7;
+  unsigned long int input = 0x8242C200; // ABC; backwards & left aligned
+
+  printf( "%lx\n", compute_crc( input, 24, crc32_divisor ); // 5A5B433A
+</pre>
+<div class="caption">Listing 6: Efficient CRC routine</div>
+<p>
+If you've been following along very closely, you may have noticed that the CRC32 divisor has a coefficient at x<sup>32</sup> &mdash;
+which means that it's actually 33 bits long, one bit too long for a long
+integer.  So how can you represent it in a 32-bit int?  You don't.  The CRC32
+check value is 32 bits long, so the most-significant bit in the divisor
+doesn't factor into the computation at all.  It's actually just there in the
+specification to clarify that the divisor is 32 bits long, rather than 26.  The
+bit at x<sup>32</sup> actually never factors into the computation.  The divisor
+of 04C11DB7 above, therefore, just omits it entirely.
+</p>
+<p>
+There are two glaring problems, though, with the routine in listing 6.  The first, and
+most obvious, is that it can only compute the CRC of a maximum of 32 bits of
+input.  The second is that I've replicated the bit ordering of listing 4.
+Although this makes listing 4 easy to read, it complicates the loading of the
+input, since you have to specify everything "backwards" &mdash; if you want
+to compute the CRC of "ABC", you have to reverse the bits and left align them
+to match the endian-ness of the processor.  Listing 7 reverses
+the computation so that bytes are processed in the correct order, and accepts
+an array of arbitrary length, processing the input one byte at a time.
+</p>
+<pre>
+unsigned long int compute_crc( unsigned char *input,
+                               int len,
+                               unsigned long divisor )
+{
+  int i, k;
+  unsigned long crc = 0x0;
+
+  for ( i = 0; i < len; i++ )
+  {
+    crc ^= ( input[ i ] );
+    for ( k = 8; k; k-- )
+    {
+      crc = crc & 1 ? ( crc >> 1 ) ^ divisor : crc >> 1;
+    }
+  }
+
+  return crc;
+}
+</pre>
+<div class="caption">Listing 7: reversed CRC computation</div>
+<p>
+A more subtle problem with the CRC computation in listing 7 is that it doesn't
+"kick in" until the first 1 bit in the input.  This may not necessarily seem
+like a significant problem, but this means that an input prepended with a run of leading
+0's will not be detected as an error by the CRC computation.  For this reason,
+the <a href="http://www.iso.org/iso/iso_catalogue/catalogue_ics/catalogue_detail_ics.htm?csnumber=8559">official</a> CRC32 standard suggests that you start with all 1's instead of
+all 0's - listing 8, then, shows how to compute the actual correct, official,
+CRC32 according to the standard.  The output of this will match any other
+"proper" standard-compliant implementation.  Also note that since the processing has been reversed,
+the CRC divisor has to be as well - the correct CRC32 divisor for the
+routine in listing 8 is 0xEDB88320.
+</p>
+<pre>
+unsigned long int compute_crc( unsigned char *input,
+                               int len,
+                               unsigned long divisor )
+{
+  int i, k;
+  unsigned long crc = 0xFFFFFFFF;
+
+  for ( i = 0; i < len; i++ )
+  {
+    crc ^= ( input[ i ] );
+    for ( k = 8; k; k-- )
+    {
+      crc = crc & 1 ? ( crc >> 1 ) ^ divisor : crc >> 1;
+    }
+  }
+
+  return crc ^ 0xFFFFFFFF;
+}
+...
+  printf( "%lx\n", compute_crc( "ABC", 3, 0xEDB88320 ); // a3830348
+</pre>
+<div class="caption">Listing 8: Inverted CRC computation to catch runs of leading 0's</div>
+<p>
+You can make a space/speed tradeoff and speed up this routine even more.  The
+key observation here is that the CRC32 of a single byte doesn't change from
+one run to the next - so you can pre-compute the values of each possible
+input byte and store them in memory.  Take a look at listing 9; here the
+CRC32 of each byte is computed individually and the byte values are concatenated
+together to compute the final CRC value.
+</p>
+<pre>
+unsigned long int crc_byte( unsigned long input,
+                            unsigned long divisor )
+{
+  int k;
+
+  for ( k = 8; k; k-- )
+  {
+    input = input & 1 ? (input >> 1) ^ divisor : input >> 1;
+  }
+
+  return input;
+}
+
+unsigned long int compute_crc( unsigned char *input,
+                               int len,
+                               unsigned long divisor )
+{
+  int i;
+  unsigned long crc = 0xFFFFFFFF;
+
+  for ( i = 0; i < len; i++ )
+  {
+    crc = crc_byte( ( crc ^ input[ i ] ) & 0xff, divisor ) ^ ( crc >> 8 );
+  }
+
+  return crc ^ 0xFFFFFFFF;
+}
+</pre>
+<div class="caption">Listing 9: Bytewise CRC32 computation</div>
+<p>
+This isn't any faster than the implementation in listing 9, but the
+invocation of crc_byte can be replaced with a call to a lookup array as
+in listing 10, which speeds things up quite a bit.
+</p>
+<pre>
+unsigned long crc_table[ 255 ];
+
+unsigned long int compute_crc( unsigned char *input,
+                               int len,
+                               unsigned long divisor )
+{
+  int i;
+  unsigned long crc = 0xFFFFFFFF;
+
+  for ( i = 0; i < len; i++ )
+  {
+    crc = crc_table[ ( crc ^ input[ i ] ) & 0xff ] ^ ( crc >> 8 );
+  }
+
+  return crc ^ 0xFFFFFFFF;
+}
+...
+  for ( i = 0; i < 255; i++ )
+  {
+    crc_table[ i ] = crc_byte( i, crc32_divisor );
+  }
+</pre>
+<div class="caption">Listing 10: Lookup table CRC32 computation</div>
+<p>
+In fact, most CRC implementations use a table like this one and don't
+even compute them at startup time but instead hardcode them as illustrated
+in listing 11.
+</p>
+<pre>
+/* ========================================================================
+ * Table of CRC-32's of all single-byte values (made by makecrc.c)
+ */
+ulg crc_32_tab[] = {
+  0x00000000L, 0x77073096L, 0xee0e612cL, 0x990951baL, 0x076dc419L,
+  0x706af48fL, 0xe963a535L, 0x9e6495a3L, 0x0edb8832L, 0x79dcb8a4L,
+  0xe0d5e91eL, 0x97d2d988L, 0x09b64c2bL, 0x7eb17cbdL, 0xe7b82d07L,
+...
+</pre>
+<div class="caption">Listing 11: Hardcoded CRC32 lookup table</div>
+<p>
+Listing 11 is, in fact, an excerpt from Jean-loup Gailly's CRC implementation 
+in the open-source <a href="http://www.gzip.org">gzip application</a>.  
+Listing 10 is, more or less, how he implemented the actual CRC computation.
+</p>
+<h2>Add a comment:</h2><p class="caption">Completely off-topic or spam comments will be removed at the discretion of the moderator.</p><p class="caption">You may preserve formatting (e.g. a code sample) by indenting with four spaces preceding the formatted line(s)</p><form method=post action="/cgi-bin/addcomment.cgi" onsubmit='return validate(this)'>Name: <input type=text name=name /><span style='display: none'>Name is required</span><br/>Email (will not be displayed publicly): <input type=text name=email /><br/><div style='display: none'><input type=text name=verify></div>Comment:<br/><textarea rows=20 cols=100 name=comment onkeydown='movecaptcha(this)'/></textarea><span style='display: none'>Comment is required</span><br/><div id='g_recaptcha' class='g-recaptcha' data-sitekey='6Lcm9wwTAAAAAO2XQcH7xEbgvX2dtRNDy2ZFHQuV'></div><input type=submit value="comment" ><input type=hidden name=article value="art008"/></form><a name="comments" /><div class="comment"><div><b>Stephan Brumme</b>, 2011-12-05</div><div>Even faster than the presented CRC32 lookup approach is Intel's Slicing-by-8 algorithm.
+It's on Sourceforge and C/C++ sources are included.
+I compared performance and memory overhead of several CRC32 algorithms on my blog (create.stephan-brumme.com/crc32/). Comes with full C/C++ sources, too.
+Regards,
+Stephan</div><div id="reply_link_732"><a href="#" onclick="return reply(732 );">reply</a></div><div style="display: none" id="reply_732"><form method=post action="/cgi-bin/addcomment.cgi" onsubmit='return validate(this)'><input type="hidden" name="reply_to" value="732" /><br/>Name: <input type=text name=name /><span style='display: none'>Name is required</span><br/>Email (will not be displayed publicly): <input type=text name=email /><br/><div style='display: none'><input type=text name=verify></div>Comment:<br/><textarea rows=20 cols=100 name=comment onkeydown='movecaptcha(this)'/></textarea><span style='display: none'>Comment is required</span><br/><input type=submit value="reply" />&nbsp;<input type=button value="cancel" onclick="cancel( 732 )" /><input type=hidden name=article value="art008"/></form></div></div><div class="comment"><div><b>no.one@no.where</b>, 2011-12-05</div><div>You've got a bug (in two places): the array length, and the upper bound, should be 256.</div><div id="reply_link_733"><a href="#" onclick="return reply(733 );">reply</a></div><div style="display: none" id="reply_733"><form method=post action="/cgi-bin/addcomment.cgi" onsubmit='return validate(this)'><input type="hidden" name="reply_to" value="733" /><br/>Name: <input type=text name=name /><span style='display: none'>Name is required</span><br/>Email (will not be displayed publicly): <input type=text name=email /><br/><div style='display: none'><input type=text name=verify></div>Comment:<br/><textarea rows=20 cols=100 name=comment onkeydown='movecaptcha(this)'/></textarea><span style='display: none'>Comment is required</span><br/><input type=submit value="reply" />&nbsp;<input type=button value="cancel" onclick="cancel( 733 )" /><input type=hidden name=article value="art008"/></form></div><div class="comment"><div><b>Josh</b>, 2011-12-06</div><div>Ah, you're correct, no.one@no.where.  Listing 10 should read:
+
+unsigned long crc_table[ 256 ];
+...
+  for ( i = 0; i &lt; 256; i++ )
+  {
+    crc_table[ i ] = crc_byte( i, crc32_divisor );
+  }
+
+else an input byte of 0xFF will cause the computation to return an incorrect result (or possibly even SIGSEGV).  That'll teach me to post something without testing it first... I wish I could say that's the first time I've ever done that ; )</div><div id="reply_link_735"><a href="#" onclick="return reply(735 );">reply</a></div><div style="display: none" id="reply_735"><form method=post action="/cgi-bin/addcomment.cgi" onsubmit='return validate(this)'><input type="hidden" name="reply_to" value="735" /><br/>Name: <input type=text name=name /><span style='display: none'>Name is required</span><br/>Email (will not be displayed publicly): <input type=text name=email /><br/><div style='display: none'><input type=text name=verify></div>Comment:<br/><textarea rows=20 cols=100 name=comment onkeydown='movecaptcha(this)'/></textarea><span style='display: none'>Comment is required</span><br/><input type=submit value="reply" />&nbsp;<input type=button value="cancel" onclick="cancel( 735 )" /><input type=hidden name=article value="art008"/></form></div></div></div><div class="comment"><div><b>ZyprexaNY</b>, 2011-12-28</div><div>How do I get my computer to continue to keep sign in passwords so I don't have to put them in all the time? When i on my desktop, there is no display and the c.p.u produces 45-50 beeping sounds and this is repeated eve?</div><div id="reply_link_773"><a href="#" onclick="return reply(773 );">reply</a></div><div style="display: none" id="reply_773"><form method=post action="/cgi-bin/addcomment.cgi" onsubmit='return validate(this)'><input type="hidden" name="reply_to" value="773" /><br/>Name: <input type=text name=name /><span style='display: none'>Name is required</span><br/>Email (will not be displayed publicly): <input type=text name=email /><br/><div style='display: none'><input type=text name=verify></div>Comment:<br/><textarea rows=20 cols=100 name=comment onkeydown='movecaptcha(this)'/></textarea><span style='display: none'>Comment is required</span><br/><input type=submit value="reply" />&nbsp;<input type=button value="cancel" onclick="cancel( 773 )" /><input type=hidden name=article value="art008"/></form></div></div><div class="comment"><div><b>Marilee</b>, 2011-12-31</div><div>Clear, informative, smilpe. Could I send you some e-hugs?</div><div id="reply_link_784"><a href="#" onclick="return reply(784 );">reply</a></div><div style="display: none" id="reply_784"><form method=post action="/cgi-bin/addcomment.cgi" onsubmit='return validate(this)'><input type="hidden" name="reply_to" value="784" /><br/>Name: <input type=text name=name /><span style='display: none'>Name is required</span><br/>Email (will not be displayed publicly): <input type=text name=email /><br/><div style='display: none'><input type=text name=verify></div>Comment:<br/><textarea rows=20 cols=100 name=comment onkeydown='movecaptcha(this)'/></textarea><span style='display: none'>Comment is required</span><br/><input type=submit value="reply" />&nbsp;<input type=button value="cancel" onclick="cancel( 784 )" /><input type=hidden name=article value="art008"/></form></div></div><div class="comment"><div><b>Vikas</b>, 2012-04-02</div><div>Hahaha anto   yes actually i wntead to begin by the basics   the code that we made in university  was already doneand i wntead to improve it .. ( on the code of university i already putted threads    to improve the code )anyway  i wntead to explain how to create a pixel from scratch in a bmp file and toshow how to make something better   cause i wasn't following this course as you remember</div><div id="reply_link_859"><a href="#" onclick="return reply(859 );">reply</a></div><div style="display: none" id="reply_859"><form method=post action="/cgi-bin/addcomment.cgi" onsubmit='return validate(this)'><input type="hidden" name="reply_to" value="859" /><br/>Name: <input type=text name=name /><span style='display: none'>Name is required</span><br/>Email (will not be displayed publicly): <input type=text name=email /><br/><div style='display: none'><input type=text name=verify></div>Comment:<br/><textarea rows=20 cols=100 name=comment onkeydown='movecaptcha(this)'/></textarea><span style='display: none'>Comment is required</span><br/><input type=submit value="reply" />&nbsp;<input type=button value="cancel" onclick="cancel( 859 )" /><input type=hidden name=article value="art008"/></form></div></div><div class="comment"><div><b>gumQueela</b>, 2013-05-22</div><div>Not quite every legacy and new-look IT vendor has its own plagiarize on making the uninterrupted details center more programmable via software and less dependent on specialized, proprietary and over the odds hardware.</div><div id="reply_link_1882"><a href="#" onclick="return reply(1882 );">reply</a></div><div style="display: none" id="reply_1882"><form method=post action="/cgi-bin/addcomment.cgi" onsubmit='return validate(this)'><input type="hidden" name="reply_to" value="1882" /><br/>Name: <input type=text name=name /><span style='display: none'>Name is required</span><br/>Email (will not be displayed publicly): <input type=text name=email /><br/><div style='display: none'><input type=text name=verify></div>Comment:<br/><textarea rows=20 cols=100 name=comment onkeydown='movecaptcha(this)'/></textarea><span style='display: none'>Comment is required</span><br/><input type=submit value="reply" />&nbsp;<input type=button value="cancel" onclick="cancel( 1882 )" /><input type=hidden name=article value="art008"/></form></div></div></div></td><td valign=top><div>
+<img src="/1118038754.jpg" alt="My Book" />
+<p>I'm the author of the book
+<a href="http://www.wiley.com/WileyCDA/WileyTitle/productCd-0470920416.html">"Implementing SSL/TLS Using Cryptography and PKI"</a>.
+Like the title says, this is a from-the-ground-up examination
+of the SSL protocol that provides security, integrity and
+privacy to most application-level internet protocols, most notably HTTP.
+I include the
+<a href="http://media.wiley.com/product_ancillary/16/04709204/DOWNLOAD/920411%20implementing_ssl_gcc.zip">source</a>
+ code to a complete working SSL implementation,
+including the most popular cryptographic algorithms
+(DES, 3DES, RC4, AES, RSA, DSA, Diffie-Hellman, HMAC, MD5, SHA-1,
+SHA-256, and ECC), and show how they all fit together
+to provide transport-layer security.
+</div>
+<div>
+<img src="/JoshuaDavies.jpg" alt="My Picture" />
+<p class="caption">Joshua Davies<p>
+<!--
+<iframe src="https://www.facebook.com/plugins/like.php?href=commandlinefanatic.com"
+  scrolling="no" frameborder="0" 
+  style="border: none; width: 450px; height: 80px">
+</iframe>
+-->
+</div>
+
+<div>
+<h2>Past Posts</h2>
+<ul>
+<li>April 30, 2021: <a href="/cgi-bin/showarticle.cgi?article=art097">A Date Picker Control in Vanilla Javascript</a></li>
+<li>March 31, 2021: <a href="/cgi-bin/showarticle.cgi?article=art096">A Web Admin Console for Redis, Part Three</a></li>
+<li>January 27, 2021: <a href="/cgi-bin/showarticle.cgi?article=art095">A Web Admin Console for Redis, Part Two</a></li>
+<li>December 21, 2020: <a href="/cgi-bin/showarticle.cgi?article=art094">A Web Admin Console for Redis, Part One</a></li>
+<li>November 30, 2020: <a href="/cgi-bin/showarticle.cgi?article=art093">What is Procmail and why is it using up all my memory?</a></li>
+<li>September 30, 2020: <a href="/cgi-bin/showarticle.cgi?article=art092">Minimal Drag and Drop Support in Javascript</a></li>
+<li>August 31, 2020: <a href="/cgi-bin/showarticle.cgi?article=art091">Covariance and Contravariance in Generic Types</a></li>
+<li>July 31, 2020: <a href="/cgi-bin/showarticle.cgi?article=art090">How Spread Out Are the Floating Point Numbers?</a></li>
+<li>June 25, 2020: <a href="/cgi-bin/showarticle.cgi?article=art089">ERD Diagramming Tool, Part Three</a></li>
+<li>April 30, 2020: <a href="/cgi-bin/showarticle.cgi?article=art088">ERD Diagramming Tool, Part Two</a></li>
+<li>March 31, 2020: <a href="/cgi-bin/showarticle.cgi?article=art087">ERD Diagramming Tool, Part One</a></li>
+<li>February 28, 2020: <a href="/cgi-bin/showarticle.cgi?article=art086">MathJax and "t.setAttribute is not a function"</a></li>
+<li>December 30, 2019: <a href="/cgi-bin/showarticle.cgi?article=art085">Solving Systems of Equations with Python</a></li>
+<li>October 30, 2019: <a href="/cgi-bin/showarticle.cgi?article=art084">Linear Regression with and without numpy</a></li>
+<li>September 30, 2019: <a href="/cgi-bin/showarticle.cgi?article=art083">Reading a Parquet file outside of Spark</a></li>
+<li>August 30, 2019: <a href="/cgi-bin/showarticle.cgi?article=art082">UML Diagrams with MetaUML</a></li>
+<li>July 30, 2019: <a href="/cgi-bin/showarticle.cgi?article=art081">Clustering in Python</a></li>
+<li>June 25, 2019: <a href="/cgi-bin/showarticle.cgi?article=art080">A Walkthrough of a TLS 1.3 Handhsake</a></li>
+<li>May 31, 2019: <a href="/cgi-bin/showarticle.cgi?article=art079">A DataType Printer in Java</a></li>
+<li>April 30, 2019: <a href="/cgi-bin/showarticle.cgi?article=art078">A Simple HTTP Server in Java, Part 3 - Cookies and Keep Alives</a></li>
+<li>March 28, 2019: <a href="/cgi-bin/showarticle.cgi?article=art077">A Simple HTTP Server in Java, Part 2 - POST and SSL</a></li>
+<li>February 28, 2019: <a href="/cgi-bin/showarticle.cgi?article=art076">A Simple HTTP Server in Java</a></li>
+<li>January 29, 2019: <a href="/cgi-bin/showarticle.cgi?article=art075">Angular CLI Behind the Scenes, Part Two</a></li>
+<li>September 30, 2018: <a href="/cgi-bin/showarticle.cgi?article=art074">Angular CLI Behind the Scenes, Part One</a></li>
+<li>August 31, 2018: <a href="/cgi-bin/showarticle.cgi?article=art073">Into the MMIX MOR Instruction</a></li>
+<li>July 24, 2018: <a href="/cgi-bin/showarticle.cgi?article=art072">Undoing Percentage Changes in your Head</a></li>
+<li>June 30, 2018: <a href="/cgi-bin/showarticle.cgi?article=art071">Generating Langford Pairs in Scala</a></li>
+<li>May 25, 2018: <a href="/cgi-bin/showarticle.cgi?article=art070">Reflections on Three Years of Reading Knuth</a></li>
+<li>April 30, 2018: <a href="/cgi-bin/showarticle.cgi?article=art069">java.lang.NoSuchMethodError: org.junit.vintage. engine.descriptor.RunnerTestDescriptor. getAllDescendants</a></li>
+<li>March 30, 2018: <a href="/cgi-bin/showarticle.cgi?article=art068">An Excel Spreadsheet for the Academy Awards</a></li>
+<li>February 28, 2018: <a href="/cgi-bin/showarticle.cgi?article=art067">Git for Subversion Users</a></li>
+<li>January 31, 2018: <a href="/cgi-bin/showarticle.cgi?article=art066">The Evolution of AngularJS</a></li>
+<li>December 31, 2017: <a href="/cgi-bin/showarticle.cgi?article=art065">Numerical Integration in Python</a></li>
+<li>October 31, 2017: <a href="/cgi-bin/showarticle.cgi?article=art064">Gradle for Java Developers</a></li>
+<li>September 29, 2017: <a href="/cgi-bin/showarticle.cgi?article=art063">Reflections on another year of reading Knuth</a></li>
+<li>August 30, 2017: <a href="/cgi-bin/showarticle.cgi?article=art062">SSL OCSP Exchange</a></li>
+<li>July 27, 2017: <a href="/cgi-bin/showarticle.cgi?article=art061">A walk-through of an SSL certificate exchange</a></li>
+<li>June 30, 2017: <a href="/cgi-bin/showarticle.cgi?article=art060">A walk-through of an SSL key exchange</a></li>
+<li>May 31, 2017: <a href="/cgi-bin/showarticle.cgi?article=art059">A walk-through of the SSL handshake</a></li>
+<li>March 31, 2017: <a href="/cgi-bin/showarticle.cgi?article=art058">A walk-through of the TCP handshake</a></li>
+<li>February 28, 2017: <a href="/cgi-bin/showarticle.cgi?article=art057">The TLS Handshake at a High Level</a></li>
+<li>January 31, 2017: <a href="/cgi-bin/showarticle.cgi?article=art056">A Walk-through of a JWT Verification</a></li>
+<li>August 31, 2016: <a href="/cgi-bin/showarticle.cgi?article=art055">Reflections on a year of reading Knuth</a></li>
+<li>July 29, 2016: <a href="/cgi-bin/showarticle.cgi?article=art054">Matching a private key to a public key</a></li>
+<li>June 30, 2016: <a href="/cgi-bin/showarticle.cgi?article=art053">A Completely Dissected GZIP File</a></li>
+<li>May 31, 2016: <a href="/cgi-bin/showarticle.cgi?article=art052">Automatic Guitar Tablature Generator, Part 2</a></li>
+<li>April 28, 2016: <a href="/cgi-bin/showarticle.cgi?article=art051">Automatic Guitar Tablature Generator, Part 1</a></li>
+<li>March 31, 2016: <a href="/cgi-bin/showarticle.cgi?article=art050">Import an encrypted private key into a Java Key Store</a></li>
+<li>February 26, 2016: <a href="/cgi-bin/showarticle.cgi?article=art049">Import a private key into a Java Key Store</a></li>
+<li>January 31, 2016: <a href="/cgi-bin/showarticle.cgi?article=art048">Debian Linux on MacBook Pro</a></li>
+<li>December 29, 2015: <a href="/cgi-bin/showarticle.cgi?article=art047">Is Computer Science necessary or useful for programmers?</a></li>
+<li>November 30, 2015: <a href="/cgi-bin/showarticle.cgi?article=art046">Client certificate authentication vs. password authentication</a></li>
+<li>October 28, 2015: <a href="/cgi-bin/showarticle.cgi?article=art045">A Utility for Viewing Java Keystore Contents</a></li>
+<li>September 29, 2015: <a href="/cgi-bin/showarticle.cgi?article=art044">Debugging jQuery with Chrome's Developer Tools</a></li>
+<li>August 26, 2015: <a href="/cgi-bin/showarticle.cgi?article=art043">Getting Perl, MySQL and Apache to all work together on Mac OS/X</a></li>
+<li>July 30, 2015: <a href="/cgi-bin/showarticle.cgi?article=art042">Extract certificates from Java Key Stores for use by CURL</a></li>
+<li>June 29, 2015: <a href="/cgi-bin/showarticle.cgi?article=art041">Using the Chrome web developer tools, Part 9: The Console Tab</a></li>
+<li>May 28, 2015: <a href="/cgi-bin/showarticle.cgi?article=art040">Using the Chrome web developer tools, Part 8: The Audits Tab</a></li>
+<li>April 30, 2015: <a href="/cgi-bin/showarticle.cgi?article=art039">Using the Chrome web developer tools, Part 7: The Resources Tab</a></li>
+<li>March 30, 2015: <a href="/cgi-bin/showarticle.cgi?article=art038">Using the Chrome web developer tools, Part 6: The Memory Profiler Tab</a></li>
+<li>February 27, 2015: <a href="/cgi-bin/showarticle.cgi?article=art037">Using the Chrome web developer tools, Part 5: The CPU Profiler Tab</a></li>
+<li>January 31, 2015: <a href="/cgi-bin/showarticle.cgi?article=art036">Using the Chrome web developer tools, Part 4: The Timeline Tab</a></li>
+<li>December 31, 2014: <a href="/cgi-bin/showarticle.cgi?article=art035">Using the Chrome web developer tools, Part 3: The Sources Tab</a></li>
+<li>October 31, 2014: <a href="/cgi-bin/showarticle.cgi?article=art034">Using the Chrome web developer tools, Part 2: The Network Tab</a></li>
+<li>September 30, 2014: <a href="/cgi-bin/showarticle.cgi?article=art033">Using the Chrome web developer tools, Part 1: The Elements Tab</a></li>
+<li>August 11, 2014: <a href="/cgi-bin/showarticle.cgi?article=art032">Unable to find valid certification path to requested target</a></li>
+<li>June 30, 2014: <a href="/cgi-bin/showarticle.cgi?article=art031">Sort by a Hierarchy</a></li>
+<li>May 29, 2014: <a href="/cgi-bin/showarticle.cgi?article=art030">OpenSSL Tips and Tricks</a></li>
+<li>April 25, 2014: <a href="/cgi-bin/showarticle.cgi?article=art029">Heartbleed: What the Heck Happened</a></li>
+<li>February 28, 2014: <a href="/cgi-bin/showarticle.cgi?article=art028">Replace Microsoft Money with a Spreadsheet</a></li>
+<li>January 29, 2014: <a href="/cgi-bin/showarticle.cgi?article=art027">An Illustrated Guide to the BEAST Attack</a></li>
+<li>December 21, 2013: <a href="/cgi-bin/showarticle.cgi?article=art026">Where does GCC look to find its header files?</a></li>
+<li>October 24, 2013: <a href="/cgi-bin/showarticle.cgi?article=art025">Planning a Subversion import</a></li>
+<li>August 28, 2013: <a href="/cgi-bin/showarticle.cgi?article=art024">Compile and test an iOS app from the command line</a></li>
+<li>July 31, 2013: <a href="/cgi-bin/showarticle.cgi?article=art023">The Hidden Costs of Software Reuse</a></li>
+<li>June 26, 2013: <a href="/cgi-bin/showarticle.cgi?article=art022">Beware of mvn war:inplace</a></li>
+<li>May 29, 2013: <a href="/cgi-bin/showarticle.cgi?article=art021">Block Font Design Using Javascript</a></li>
+<li>April 4, 2013: <a href="/cgi-bin/showarticle.cgi?article=art020">Parsing a POM file using only SED</a></li>
+<li>February 22, 2013: <a href="/cgi-bin/showarticle.cgi?article=art019">Inside the PDF File Format</a></li>
+<li>December 31, 2012:<a href="/cgi-bin/showarticle.cgi?article=art018">How and why rotation matrices work</a></li>
+<li>November 27, 2012:<a href="/cgi-bin/showarticle.cgi?article=art017">Date Management in Java</a></li>
+<li>October 21, 2012:
+<a href="/cgi-bin/showarticle.cgi?article=art016">Installing Debian Without a Network</a>
+<li>August 14, 2012:
+<a href="/cgi-bin/showarticle.cgi?article=art015">My Review of Matt Neuburg's "Programming iOS 5"</a>
+<li>July 16, 2012:
+<a href="/cgi-bin/showarticle.cgi?article=art014">An example OAuth 1.0 Handshake and mini-library</a>
+<li>May 23, 2012:
+<a href="/cgi-bin/showarticle.cgi?article=art013">A Javascript one-liner to display cookie values</a>
+</li>
+<li>April 27, 2012:
+<a href="/cgi-bin/showarticle.cgi?article=art012">How SSL Certificates Use Digital Signatures</a>
+</li>
+<li>March 29, 2012:
+<a href="/cgi-bin/showarticle.cgi?article=art011">A breakdown of a GIF decoder</a>
+</li>
+<li>February 15, 2012:
+<a href="/cgi-bin/showarticle.cgi?article=art010">The design and implementation of LZW (the GIF compression algorithm)</a>
+</li>
+<li>January 16, 2012:
+<a href="/cgi-bin/showarticle.cgi?article=art009">Calculate the day of week of any date... in your head</a>
+</li>
+<li>December 4, 2011:
+<a href="/cgi-bin/showarticle.cgi?article=art008">Understanding CRC32</a>
+</li>
+<li>October 29, 2011:
+<a href="/cgi-bin/showarticle.cgi?article=art007">Efficient Huffman Decoding</a>
+</li>
+<li>October 4, 2011:
+<a href="/cgi-bin/showarticle.cgi?article=art006">Extract a private key from a Gnu Keyring file</a>
+</li>
+
+<li>September 5, 2011:
+<a href="/cgi-bin/showarticle.cgi?article=art005">From Make to Ant to Maven</a>
+</li>
+
+<li>July 18, 2011:
+<a href="/cgi-bin/showarticle.cgi?article=art004">A bottom-up look at the Apache configuration file</a>
+</li>
+
+<li>July 6, 2011:
+<a href="/cgi-bin/showarticle.cgi?article=art003">Fun with the HTML 5 Canvas Tag</a>
+</li>
+
+<li>Jun 16, 2011:
+<a href="/cgi-bin/showarticle.cgi?article=art002">Pain and disfiguration upon all comment spammers</a>
+</li>
+
+<li>May 31, 2011: 
+<a href="http://www.petrae.org/program.php">Use of RSSI and Time-of-Flight Wireless Signal Characteristics for Location Tracking</a></li>
+<li>May 7, 2011: <a href="/Implementing_SSL.pptx">Implementing SSL</a></li>
+
+<li>Apr 24, 2011: <a href="/cgi-bin/showarticle.cgi?article=art001">Dissecting the GZIP format</a></li>
+</div>
+</td><script> (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){ (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o), m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m) })(window,document,'script','//www.google-analytics.com/analytics.js','ga'); ga('create', 'UA-45140500-1', 'commandlinefanatic.com'); ga('send', 'pageview'); </script></body></html>

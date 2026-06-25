@@ -1,0 +1,10 @@
+{
+  "extends": "./.wxt/tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    // "chrome" for the extension APIs; "vitest/globals" + "node" so
+    // tests/** (describe/it/expect/vi as globals, Node's `process`, etc.)
+    // type-check under `tsc --noEmit` without per-file imports.
+    "types": ["chrome", "vitest/globals", "node"]
+  }
+}

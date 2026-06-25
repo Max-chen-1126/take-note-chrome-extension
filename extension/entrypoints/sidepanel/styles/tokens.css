@@ -1,0 +1,20 @@
+:root {
+  --tn-bg: #FFFFFF;
+  --tn-surface: #FAFAFA;
+  --tn-border: #E5E5E5;
+  --tn-text: #0A0A0A;
+  --tn-muted: #737373;
+  --tn-primary: #0A0A0A;
+  --tn-on-primary: #FFFFFF;
+  --tn-r-card: 16px;
+  --tn-r-control: 10px;
+  --tn-r-pill: 9999px;
+  --tn-font: system-ui, -apple-system, "Noto Sans TC", sans-serif;
+}
+
+.tn-app {
+  font-family: var(--tn-font);
+  color: var(--tn-text);
+  background: var(--tn-bg);
+  padding: 16px;
+}
