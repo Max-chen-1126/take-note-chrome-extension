@@ -21,7 +21,7 @@
 | 儲存 | Firestore `methodologies` / `prompt_templates`；不存筆記 |
 | 護欄 | 右尺寸個人版（見 §10）|
 
-> ⚠️ **版本再確認（知識截止陷阱）**：`gemini-3.5-flash` / `gpt-5.5` / `opus 4.8` 與 `google-adk` 確切版本，實作時以官方文件 / PyPI 再三確認後鎖進 `requirements.txt`，不得沿用訓練截止的舊版本。
+> ⚠️ **版本再確認（知識截止陷阱）**：`gemini-3.5-flash` / `gpt-5.5` / `opus 4.8` 與 `google-adk` 確切版本，實作時以官方文件 / PyPI 再三確認後鎖進 `pyproject.toml`（`uv.lock` 鎖定解析結果），不得沿用訓練截止的舊版本。
 
 ---
 
@@ -73,7 +73,7 @@ backend/
       requests.py          # NoteRequest 等 Pydantic
       events.py            # SSE 事件 model + 序列化
     core/
-      config.py            # pydantic-settings + Secret Manager
+      config.py            # pydantic-settings（env 載入；secret 經 --set-secrets 注入，見 §9）
       hygiene.py           # [[VAR]] context resolver
       logging.py           # 結構化 log（不含 secret/PII）
   tests/
@@ -82,8 +82,8 @@ backend/
     bdd/                   # pytest-bdd 對接 spec/backend.feature
     eval/                  # adk eval 資料集 + LLM-as-judge
   Dockerfile
-  requirements.txt
-  pyproject.toml
+  pyproject.toml             # uv 專案定義（含 dependencies）
+  uv.lock                    # uv 鎖定檔（鎖版本，取代 requirements.txt）
 ```
 
 ## 4. API Contract
@@ -139,7 +139,7 @@ liveness（不需認證）。
 步驟與 session state（ADK state key）：
 ```yaml
 steps:
-  collect:   # 程式前處理（非 LLM）：清洗、截斷過長 transcript、組 source
+  collect:   # 程式前處理（非 LLM）：清洗、組 source；只有內容極大才截斷
     out: state.source
   structure: { llm: true, out: state.outline }    # 整理文字結構
   draft:     { llm: true, out: state.draft }       # 產生筆記草稿
@@ -148,7 +148,7 @@ steps:
   format:    { llm: true, out: stream }            # 整理結構→最終 Markdown（token 級串流）
 ```
 - **方法論驅動差異**：每步的 `instruction` 從 Firestore methodology 的 `steps.<name>.instruction` 注入；`enabled:false` 的步驟跳過（pipeline 動態組裝）。
-- **collect** 在程式層做（截斷、去雜訊），避免把超長 transcript 直接灌進 LLM（token 物理學）。
+- **collect** 在程式層做（去雜訊、組 source），避免把超長 transcript 直接灌進 LLM（token 物理學）。截斷語意：只有內容極大（> `MAX_CONTENT_CHARS`，預設 600k 字元）才截斷頭尾保留，避免 1–2 小時課程被截。
 
 ## 6. Provider 層
 ```yaml
@@ -178,13 +178,17 @@ methodologies/{id}:
   description: string
   categories: [ article|book|podcast|youtube|coursera ]   # 適用類別
   steps:
-    structure: { enabled: bool, instruction: string }
-    draft:     { enabled: bool, instruction: string }
-    augment:   { enabled: bool, instruction: string }
-    verify:    { enabled: bool, instruction: string }
-    format:    { enabled: bool, instruction: string, output_contract: string }
+    structure: { enabled: bool, instruction: Instruction }
+    draft:     { enabled: bool, instruction: Instruction }
+    augment:   { enabled: bool, instruction: Instruction }
+    verify:    { enabled: bool, instruction: Instruction }
+    format:    { enabled: bool, instruction: Instruction, output_contract: string }
   defaults: { web_search: bool }
   version: int
+
+# Instruction：每步依 NoteRequest.mode（concise|detailed）選用對應指令文字。
+# 單一字串視為兩模式共用（向後相容；不需為每步都拆分 concise/detailed）。
+Instruction: string | { concise: string, detailed: string }
 
 prompt_templates/{id}:        # 共用 system prompt 片段（被 methodology 參照）
   name: string
@@ -214,7 +218,7 @@ secrets (Secret Manager):
   OPENAI_API_KEY
   ANTHROPIC_API_KEY
 ```
-- `pydantic-settings` 載入 env；secret 於啟動時自 Secret Manager 取得。
+- `pydantic-settings` 載入 env；secret 經 Cloud Run `--set-secrets` 在部署時注入為 env var（見 §14），應用程式不直接呼叫 Secret Manager API（不需 `google-cloud-secret-manager` runtime 依賴，見 §11）。
 - Key **絕不**進 repo / log。Gemini 用 ADC，不放 key。
 
 ## 10. Guardrails（右尺寸個人版）
@@ -232,6 +236,7 @@ secrets (Secret Manager):
 - 知識圖譜 RAG：codebase 極小。
 
 ## 11. Versioned Dependencies（實作時逐一再確認）
+- 套件管理：**uv**（`pyproject.toml` + `uv.lock`，取代 `requirements.txt`）。
 ```yaml
 runtime: python 3.12
 deps:
@@ -239,7 +244,6 @@ deps:
   fastapi: latest-stable
   uvicorn[standard]: latest-stable
   google-cloud-firestore: latest-stable
-  google-cloud-secret-manager: latest-stable
   google-auth: latest-stable
   litellm: latest-stable        # OpenAI/Claude 經 ADK LiteLlm
   pydantic: ">=2"
@@ -247,6 +251,7 @@ deps:
 dev:
   pytest, pytest-asyncio, pytest-bdd
 ```
+> `google-cloud-secret-manager` **不**作為 runtime 依賴：secrets 改由 Cloud Run `--set-secrets` 直接注入為 env var（見 §9、§14），應用程式經 `pydantic-settings` 讀 env，不在程式內呼叫 Secret Manager API。
 
 ## 12. Testing & Evaluation Strategy
 - **Unit**：auth middleware（401/403）、Firestore loader + 快取、`NoteRequest` 驗證、SSE 事件序列化、provider→model 對映、`hygiene` resolver。
