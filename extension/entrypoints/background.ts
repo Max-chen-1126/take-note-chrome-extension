@@ -10,45 +10,38 @@ const BACKEND_URL =
 
 const PROCESS_PORT_NAME = "PROCESS";
 
-/**
- * Relays a panel EXTRACT request to the active tab's content script and
- * resolves its EXTRACT_RESULT reply. Returns an extract_failed-shaped
- * EXTRACT_RESULT if there's no active tab or the content script doesn't
- * answer (e.g. chrome:// page, no content script injected).
- */
-async function handleExtract(): Promise<Msg> {
-  const errorResult: Msg = {
+/** Builds an extract_failed-shaped EXTRACT_RESULT with the given message. */
+function extractErrorResult(message: string): Msg {
+  return {
     type: "EXTRACT_RESULT",
     payload: {
       ok: false,
       category: "article",
       content: { title: "", url: "", text: "", metadata: null },
-      error: { code: "extract_failed", message: "找不到目前分頁，請重新整理頁面。" },
+      error: { code: "extract_failed", message },
     },
   };
+}
 
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab?.id) return errorResult;
-
+/**
+ * Relays a panel EXTRACT request to the active tab's content script and
+ * resolves its EXTRACT_RESULT reply. Returns an extract_failed-shaped
+ * EXTRACT_RESULT if there's no active tab, `chrome.tabs.query` rejects
+ * (e.g. transient extension-context error), or the content script doesn't
+ * answer (e.g. chrome:// page, no content script injected).
+ */
+export async function handleExtract(): Promise<Msg> {
   try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) return extractErrorResult("找不到目前分頁，請重新整理頁面。");
+
     const response = (await chrome.tabs.sendMessage(tab.id, { type: "EXTRACT" } satisfies Msg)) as
       | Msg
       | undefined;
     if (response?.type === "EXTRACT_RESULT") return response;
-    return errorResult;
+    return extractErrorResult("找不到目前分頁，請重新整理頁面。");
   } catch (err) {
-    return {
-      type: "EXTRACT_RESULT",
-      payload: {
-        ok: false,
-        category: "article",
-        content: { title: "", url: "", text: "", metadata: null },
-        error: {
-          code: "extract_failed",
-          message: err instanceof Error ? err.message : String(err),
-        },
-      },
-    };
+    return extractErrorResult(err instanceof Error ? err.message : String(err));
   }
 }
 
@@ -101,7 +94,13 @@ export default defineBackground(() => {
 
   chrome.runtime.onMessage.addListener((message: Msg, _sender, sendResponse) => {
     if (message?.type !== "EXTRACT") return undefined;
-    handleExtract().then(sendResponse);
+    // handleExtract() catches its own rejections (e.g. chrome.tabs.query
+    // failing) and resolves an extract_failed ExtractResult, but .catch()
+    // here is a defense-in-depth guarantee that sendResponse is always
+    // called even if that invariant is ever broken.
+    handleExtract()
+      .catch((err) => extractErrorResult(err instanceof Error ? err.message : String(err)))
+      .then(sendResponse);
     return true; // keep the message channel open for the async sendResponse above
   });
 

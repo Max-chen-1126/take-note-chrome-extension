@@ -9,7 +9,10 @@ export function parseSseChunk(buffer:string):{events:SseEvent[];rest:string}{
       if(line.startsWith("event:")) ev=line.slice(6).trim();
       else if(line.startsWith("data:")) data+=line.slice(5).trim();
     }
-    if(ev && data) events.push({ event:ev, data:JSON.parse(data) } as SseEvent);
+    if(ev && data){
+      try{ events.push({ event:ev, data:JSON.parse(data) } as SseEvent); }
+      catch{ /* malformed SSE frame: skip it, keep streaming subsequent frames */ }
+    }
   }
   return { events, rest };
 }
