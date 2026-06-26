@@ -13,7 +13,11 @@ function cleanPhraseText(raw: string): string {
 export function parseTranscript(doc: Document): string {
   const transcript = doc.querySelector(".rc-Transcript");
   if (!transcript) return "";
-  const phrases = Array.from(transcript.querySelectorAll(".rc-Phrase .css-mlsl36"));
+  // Use the semantic `.rc-Phrase` rather than the inner Emotion-hashed
+  // `.css-mlsl36` span, which is auto-generated and changes on Coursera
+  // rebuilds. `.rc-Phrase`'s textContent is the same phrase text (the hashed
+  // span is its only text child); the timestamp button lives outside `.phrases`.
+  const phrases = Array.from(transcript.querySelectorAll(".rc-Phrase"));
   return phrases
     .map((n) => cleanPhraseText(n.textContent ?? ""))
     .filter(Boolean)
@@ -31,6 +35,11 @@ export function extractCourseraTitle(doc: Document): string {
 export function extractCoursera(doc: Document, url: string): ExtractContent {
   const title = extractCourseraTitle(doc);
   const text = parseTranscript(doc);
+  if (!text) {
+    // No transcript in the DOM → surface a friendly extract_error (runExtract
+    // catches this) instead of sending empty content the backend would 422.
+    throw new Error("找不到課程逐字稿，請在頁面中開啟 Transcript 面板後重試。");
+  }
   const course = doc.querySelector(".left-rail a[title]")?.getAttribute("title") ?? null;
   return { title, url, text, metadata: { course } };
 }

@@ -93,8 +93,8 @@ GLOBAL_STYLE_TEMPLATE: dict = {
 
 def _frontmatter(source_type: str) -> str:
     return (
-        "最前面必須輸出 YAML frontmatter，欄位如下（title / author / url 從 "
-        "{source} 文字擷取，{source} 內含 `# 標題` 與 `來源: <url>` 兩行；"
+        "最前面必須輸出 YAML frontmatter，欄位如下（title / author / url 從"
+        "上文提供的來源文字擷取，來源文字內含 `# 標題` 與 `來源: <url>` 兩行；"
         "找不到作者則留空）：\n"
         "```\n"
         "---\n"

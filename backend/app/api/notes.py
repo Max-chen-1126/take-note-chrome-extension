@@ -44,8 +44,13 @@ async def run_pipeline(req: NoteRequest, methodology, settings) -> AsyncIterator
         yield sse("error", {"code": "methodology_not_found", "message": req.methodology_id})
         return
 
-    tmpl = get_prompt_template("global-style")
-    system = (tmpl or {}).get("system") or _FALLBACK_SYSTEM
+    try:
+        tmpl = get_prompt_template("global-style")
+        system = (tmpl or {}).get("system") or _FALLBACK_SYSTEM
+    except Exception:
+        # Firestore transient/permission failure → degrade gracefully to the
+        # built-in system prompt rather than failing the whole request.
+        system = _FALLBACK_SYSTEM
     try:
         agent = build_pipeline(methodology, req.mode.value, req.provider,
                                req.model, req.web_search, system)

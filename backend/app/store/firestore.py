@@ -4,7 +4,7 @@ from google.cloud import firestore
 
 from app.core.config import get_settings
 
-_cache: dict[str, tuple[float, dict]] = {}
+_cache: dict[str, tuple[float, dict | None]] = {}
 _client: firestore.Client | None = None
 
 
@@ -44,6 +44,7 @@ def get_prompt_template(tid: str) -> dict | None:
         return hit[1]
     doc = client_factory().collection("prompt_templates").document(tid).get()
     if not doc.exists:
+        _cache[key] = (now, None)  # negative-cache misses to avoid cache penetration
         return None
     data = doc.to_dict()
     _cache[key] = (now, data)

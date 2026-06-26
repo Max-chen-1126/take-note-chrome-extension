@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { JSDOM } from "jsdom";
-import { parseTranscript, extractCourseraTitle } from "../../src/extractors/coursera";
+import { parseTranscript, extractCourseraTitle, extractCoursera } from "../../src/extractors/coursera";
 
 function loadFixtureDoc(): Document {
   return new JSDOM(readFileSync("tests/extractors/fixtures/coursera-transcript.html", "utf8")).window.document;
@@ -67,4 +67,16 @@ it("extracts the video title from h1.video-name", () => {
 it("falls back to doc.title when h1.video-name is missing", () => {
   const doc = new JSDOM("<html><head><title>Fallback Title</title></head><body></body></html>").window.document;
   expect(extractCourseraTitle(doc)).toBe("Fallback Title");
+});
+
+it("extractCoursera returns content when a transcript is present", () => {
+  const doc = loadFixtureDoc();
+  const content = extractCoursera(doc, "https://www.coursera.org/learn/x/lecture/y/z");
+  expect(content.title).toBe("Internet Protocol");
+  expect(content.text).toContain("Internet protocol");
+});
+
+it("extractCoursera throws when the transcript is empty (panel not open)", () => {
+  const doc = new JSDOM("<html><body><h1 class='video-name'>No Transcript</h1></body></html>").window.document;
+  expect(() => extractCoursera(doc, "https://www.coursera.org/learn/x/lecture/y/z")).toThrow(/Transcript/);
 });
