@@ -35,12 +35,17 @@ async def _reject_oversized_body(request: Request, call_next):
     content_length = request.headers.get("content-length")
     if content_length is not None:
         try:
-            if int(content_length) > max_bytes:
-                return JSONResponse(
-                    status_code=413, content={"detail": "request body too large"}
-                )
+            declared = int(content_length)
         except ValueError:
-            pass
+            # A present-but-non-integer Content-Length is malformed; reject it
+            # rather than skipping the size check (which it could otherwise bypass).
+            return JSONResponse(
+                status_code=400, content={"detail": "invalid Content-Length header"}
+            )
+        if declared > max_bytes:
+            return JSONResponse(
+                status_code=413, content={"detail": "request body too large"}
+            )
     return await call_next(request)
 
 
