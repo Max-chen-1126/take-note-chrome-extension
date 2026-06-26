@@ -2,7 +2,7 @@ from collections.abc import AsyncIterator
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from google.adk.agents.run_config import RunConfig, StreamingMode
 from google.adk.runners import Runner
@@ -14,6 +14,7 @@ from app.agents.models import ProviderNotImplemented
 from app.agents.pipeline import build_pipeline
 from app.auth.middleware import verify_request
 from app.core.config import get_settings
+from app.core.limiter import limiter
 from app.schemas.events import sse
 from app.schemas.requests import NoteRequest
 from app.store.firestore import get_methodology, get_prompt_template
@@ -108,7 +109,8 @@ def _citations_from(gm) -> list[dict]:
 
 
 @router.post("/notes/stream")
-async def notes_stream(req: NoteRequest, _email: str = Depends(verify_request)):
+@limiter.limit("10/minute")
+async def notes_stream(request: Request, req: NoteRequest, _email: str = Depends(verify_request)):
     settings = get_settings()
     if len(req.content.text.strip()) < settings.min_content_chars:
         raise HTTPException(status_code=422, detail="content too short")
