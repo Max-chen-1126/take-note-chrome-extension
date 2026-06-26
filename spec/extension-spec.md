@@ -15,11 +15,11 @@
 | 版面/流程 | **雙階段**：設定頁（自動擷取卡 + 設定 + 開始）→ 結果頁（步驟進度 + 串流 Markdown + 複製 + 返回）|
 | 擷取時機 | 開 panel 即自動擷取當前頁，唯讀呈現；按「開始」才送後端 |
 | 擷取可編輯 | 否（唯讀預覽；手動貼上/編輯留 Phase 2）|
-| Auth | Cloud Run 內建 IAP 保護後端；extension 用 custom OAuth client 經 launchWebAuthFlow 取 ID token（aud=IAP 程式化用戶端 client_id）帶 Bearer；後端在 IAP 之後讀 X-Goog-Authenticated-User-Email |
+| Auth | 0.1.0：app 層 launchWebAuthFlow 取 ID token（aud=OAuth client_id）+ Bearer；後端驗簽章+aud+allowlist。規劃：Cloud Run IAP。|
 | 初版切片 | Side Panel + **YouTube + 通用 article** 擷取器 + Coursera + SSE 串流 + 複製；對本地後端跑通 |
 | 延後(Phase 2) | 手動貼上/可編輯、auth 正式化、多 provider UI、popup fallback、深色模式 |
 
-> **跨端協調（已定）**：認證採 Cloud Run 內建 IAP（非 app 層 aud 驗證）。後端在 IAP 後讀 X-Goog-Authenticated-User-Email + allowlist；extension 取 aud=IAP 程式化 client_id 的 token。先以 spike 驗證再切換。
+> **跨端協調（已定）**：0.1.0 採 app 層認證（後端 aud==OAuth client_id）；IAP 為 post-0.1.0 規劃。
 
 ## Objective
 在學習頁面（初版：YouTube、一般文章類網頁）一鍵把內文/transcript 擷取出來，於 Side Panel 確認後送後端生成結構化 Markdown 筆記，逐步串流呈現並一鍵複製。
@@ -113,12 +113,13 @@ background → panel:  { type: "SSE", event: "step|delta|citations|done|error", 
 - background 持有對後端的 SSE fetch；串流期間以 port 保持 panel 連線（MV3 SW 生命週期下）；斷線→ error 並保留已收內容。
 - `NoteRequest` / SSE 事件型別與 [`backend-spec.md`](backend-spec.md) 跨端契約一致，不可單方更動。
 
-## Auth Flow（IAP）
-- 後端受 Cloud Run 內建 IAP 保護（見 [`backend-spec.md`](backend-spec.md) §8）。
-- `chrome.identity.launchWebAuthFlow`：用 IAP 程式化存取允許清單（`programmatic_clients`）中的 **custom OAuth client_id** 當 aud，`response_type=id_token`、`scope=openid email`，取得 Google **ID token**。
-- `/notes/stream`、`/methodologies` 請求帶 `Authorization: Bearer <id_token>` 給受 IAP 保護的後端。
+## Auth Flow（app 層）
+- 0.1.0 採 app 層認證（見 [`backend-spec.md`](backend-spec.md) §8）。
+- `chrome.identity.launchWebAuthFlow`：用 **Web OAuth client** 當 aud，`response_type=id_token`、`scope=openid email`，取得 Google **ID token**（`aud` = OAuth client_id）。
+- `/notes/stream`、`/methodologies` 請求帶 `Authorization: Bearer <id_token>`。
 - token 快取於記憶體 + `chrome.storage.session`；過期(401)觸發重新授權。
-- 後端不自驗 token，由 IAP 在邊緣驗證後注入 `X-Goog-Authenticated-User-Email`，後端讀此 header 比對 email allowlist。
+- 後端驗 ID token 簽章 + `aud == OAUTH_CLIENT_ID` + email allowlist。
+> 規劃：改走 Cloud Run IAP（aud=IAP 程式化 client_id）。
 
 ## Extraction Methods
 ```yaml
