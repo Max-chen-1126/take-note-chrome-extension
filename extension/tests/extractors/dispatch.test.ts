@@ -19,3 +19,12 @@ it("treats invalid URLs as article", () => {
 it("matches bare youtube.com host without subdomain", () => {
   expect(categorize("https://youtube.com/watch?v=abc")).toBe("youtube");
 });
+
+it("categorizes coursera lecture pages", () => {
+  expect(categorize("https://www.coursera.org/learn/network-systems-foundations/lecture/EBigY/internet-protocol")).toBe("coursera");
+});
+
+it("does not categorize non-lecture coursera pages as coursera", () => {
+  expect(categorize("https://www.coursera.org/learn/network-systems-foundations")).toBe("article");
+  expect(categorize("https://www.coursera.org/")).toBe("article");
+});

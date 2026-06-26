@@ -1,0 +1,56 @@
+<!--
+  Synthetic fixture: a trimmed snippet shaped like Coursera's lecture page DOM
+  for the interactive transcript (div.rc-Transcript[data-track-component=
+  "interactive_transcript"]) plus the video title (h1.video-name) and the
+  left-rail course link (a[title]). On the real page the full transcript
+  appears twice in the DOM (once hidden, once in the visible panel) with
+  identical content; this fixture mirrors that duplication to validate that
+  parseTranscript only reads the first occurrence. Each phrase span carries a
+  leading zero-width space (U+200B) and a trailing no-break space (U+00A0) as
+  observed on the live page. Not captured from a live page.
+-->
+<div id="app">
+  <aside class="left-rail">
+    <a title="Network Systems Foundations" href="/learn/network-systems-foundations">Network Systems Foundations</a>
+  </aside>
+
+  <main>
+    <h1 class="video-name">Internet Protocol</h1>
+
+    <div class="rc-Transcript" data-track-component="interactive_transcript" aria-hidden="true" style="display:none">
+      <div class="rc-Paragraph">
+        <button class="timestamp">0:09</button>
+        <div class="phrases">
+          <span class="rc-Phrase"><span class="css-mlsl36">&#8203;Let's jump in to talk about the Internet protocol.&#160;</span></span>
+          <span class="rc-Phrase"><span class="css-mlsl36">&#8203;It's the layer that lets every network speak the same language.&#160;</span></span>
+        </div>
+      </div>
+      <div class="rc-Paragraph">
+        <button class="timestamp">0:18</button>
+        <div class="phrases">
+          <span class="rc-Phrase"><span class="css-mlsl36">&#8203;Each packet carries a source and destination address.&#160;</span></span>
+          <span class="rc-Phrase"><span class="css-mlsl36">&#8203;Routers use that address to forward the packet onward.&#160;</span></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="transcript-panel">
+      <div class="rc-Transcript" data-track-component="interactive_transcript">
+        <div class="rc-Paragraph">
+          <button class="timestamp">0:09</button>
+          <div class="phrases">
+            <span class="rc-Phrase"><span class="css-mlsl36">&#8203;Let's jump in to talk about the Internet protocol.&#160;</span></span>
+            <span class="rc-Phrase"><span class="css-mlsl36">&#8203;It's the layer that lets every network speak the same language.&#160;</span></span>
+          </div>
+        </div>
+        <div class="rc-Paragraph">
+          <button class="timestamp">0:18</button>
+          <div class="phrases">
+            <span class="rc-Phrase"><span class="css-mlsl36">&#8203;Each packet carries a source and destination address.&#160;</span></span>
+            <span class="rc-Phrase"><span class="css-mlsl36">&#8203;Routers use that address to forward the packet onward.&#160;</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
