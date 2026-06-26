@@ -19,7 +19,7 @@ def verify_request(request: Request) -> str:
     token = auth.split(" ", 1)[1]
     try:
         claims = id_token.verify_oauth2_token(
-            token, _transport, audience=settings.cloud_run_service_url or None
+            token, _transport, audience=settings.oauth_client_id or None
         )
     except ValueError as exc:
         # google.oauth2.id_token.verify_oauth2_token 對無效/過期/格式錯誤的

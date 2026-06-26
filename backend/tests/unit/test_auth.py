@@ -34,6 +34,21 @@ def test_ok(monkeypatch):
     assert mw.verify_request(_req({"Authorization": "Bearer t"})) == "ok@x.com"
 
 
+def test_audience_is_oauth_client_id(monkeypatch):
+    monkeypatch.setenv("ALLOWED_EMAILS", "ok@x.com")
+    monkeypatch.setenv("OAUTH_CLIENT_ID", "cid.apps.googleusercontent.com")
+    cfg.get_settings.cache_clear()
+    seen = {}
+
+    def fake_verify(token, transport, audience=None):
+        seen["audience"] = audience
+        return {"email": "ok@x.com"}
+
+    monkeypatch.setattr(mw.id_token, "verify_oauth2_token", fake_verify)
+    assert mw.verify_request(_req({"Authorization": "Bearer t"})) == "ok@x.com"
+    assert seen["audience"] == "cid.apps.googleusercontent.com"
+
+
 def test_invalid_token_maps_to_401(monkeypatch):
     monkeypatch.setattr(
         mw.id_token, "verify_oauth2_token",
