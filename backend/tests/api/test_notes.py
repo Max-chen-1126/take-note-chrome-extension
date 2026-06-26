@@ -1,3 +1,6 @@
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 import pytest
 import app.api.notes as notes
 from app.schemas.requests import NoteRequest
@@ -61,3 +64,23 @@ async def test_format_event_without_parts_does_not_crash(monkeypatch):
     body = "".join([c async for c in notes.run_pipeline(_req(), methodology, notes.get_settings())])
     assert "provider_error" not in body
     assert "event: done" in body
+
+
+@pytest.mark.asyncio
+async def test_initial_state_includes_taipei_date(monkeypatch):
+    methodology = {"categories": ["youtube"],
+                   "steps": {s: {"enabled": True, "instruction": {"concise": s}}
+                             for s in ["structure", "draft", "augment", "verify", "format"]}}
+    captured = {}
+
+    async def fake_drive_adk(agent, initial_state):
+        captured["initial_state"] = initial_state
+        from types import SimpleNamespace as N
+        yield N(author="step_format", partial=False, content=N(parts=[N(text="# ok")]),
+                grounding_metadata=None, is_final_response=lambda: True)
+
+    monkeypatch.setattr(notes, "_drive_adk", fake_drive_adk)
+    body = "".join([c async for c in notes.run_pipeline(_req(), methodology, notes.get_settings())])
+    assert "event: done" in body
+    expected = datetime.now(ZoneInfo("Asia/Taipei")).date().isoformat()
+    assert captured["initial_state"]["date"] == expected

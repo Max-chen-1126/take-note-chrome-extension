@@ -1,4 +1,6 @@
 from collections.abc import AsyncIterator
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -51,6 +53,7 @@ async def run_pipeline(req: NoteRequest, methodology, settings) -> AsyncIterator
         "source": build_source(req.content),
         "direction": req.direction,
         "extra": req.extra_requirements or "",
+        "date": datetime.now(ZoneInfo("Asia/Taipei")).date().isoformat(),
     }
 
     final_markdown = ""
