@@ -235,7 +235,7 @@ env:
 ## 10. Guardrails（右尺寸個人版）
 **採用**：
 - email allowlist（單一信任使用者）。
-- secret 經 Secret Manager，不進 repo / log；最小權限 service account（Vertex User、Firestore User、Secret Accessor）。
+- 金鑰 / 敏感值不進 repo / log（0.1.0 為 Gemini-only，無 vendor API key）；最小權限 service account（Vertex AI User、Firestore User）。OpenAI/Claude 啟用時才需 Secret Manager + Secret Accessor。
 - Context hygiene：`core/hygiene.py` 的 `[[VAR]]` 佔位符解析（runtime override → env → 留白不靜默失敗），確保身分 / 敏感值不硬編進 prompt。
 - Evaluation：`adk eval` + LLM-as-judge（0–5 分 + 容忍帶）抓行為漂移；單元測試抓決定性回歸。
 - 版本鎖定、禁 YOLO（先確認結構與技術棧）。
