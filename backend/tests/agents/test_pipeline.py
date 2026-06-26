@@ -18,6 +18,17 @@ def test_builds_all_steps_concise():
     assert "structure-c" in agent.sub_agents[0].instruction
 
 
+def test_format_step_includes_output_contract():
+    m = _methodology()
+    m["steps"]["format"]["output_contract"] = "FRONTMATTER-SPEC created: {date}"
+    agent = build_pipeline(m, "concise", Provider.gemini, None, False, "SYS")
+    fmt = next(a for a in agent.sub_agents if a.name == "step_format")
+    assert "FRONTMATTER-SPEC created: {date}" in fmt.instruction
+    # non-format steps must NOT receive the contract
+    other = next(a for a in agent.sub_agents if a.name == "step_structure")
+    assert "FRONTMATTER-SPEC" not in other.instruction
+
+
 def test_skips_disabled_step():
     agent = build_pipeline(_methodology(disabled=("augment",)), "detailed",
                            Provider.gemini, None, False, "SYS")
