@@ -16,7 +16,9 @@ from app.auth.middleware import verify_request
 from app.core.config import get_settings
 from app.schemas.events import sse
 from app.schemas.requests import NoteRequest
-from app.store.firestore import get_methodology
+from app.store.firestore import get_methodology, get_prompt_template
+
+_FALLBACK_SYSTEM = "你是專業的學習筆記整理者，輸出繁體中文 Markdown。"
 
 router = APIRouter()
 _APP_NAME = "take-note"
@@ -42,7 +44,8 @@ async def run_pipeline(req: NoteRequest, methodology, settings) -> AsyncIterator
         yield sse("error", {"code": "methodology_not_found", "message": req.methodology_id})
         return
 
-    system = "你是專業的學習筆記整理者，輸出繁體中文 Markdown。"
+    tmpl = get_prompt_template("global-style")
+    system = (tmpl or {}).get("system") or _FALLBACK_SYSTEM
     try:
         agent = build_pipeline(methodology, req.mode.value, req.provider,
                                req.model, req.web_search, system)

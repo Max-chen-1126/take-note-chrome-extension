@@ -35,6 +35,21 @@ def get_methodology(mid: str) -> dict | None:
     return data
 
 
+def get_prompt_template(tid: str) -> dict | None:
+    ttl = get_settings().methodology_cache_ttl
+    now = time.time()
+    key = f"tmpl:{tid}"
+    hit = _cache.get(key)
+    if hit and now - hit[0] < ttl:
+        return hit[1]
+    doc = client_factory().collection("prompt_templates").document(tid).get()
+    if not doc.exists:
+        return None
+    data = doc.to_dict()
+    _cache[key] = (now, data)
+    return data
+
+
 def list_methodologies() -> list[dict]:
     out = []
     for d in client_factory().collection("methodologies").stream():

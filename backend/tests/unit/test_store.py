@@ -58,3 +58,30 @@ def test_get_methodology_missing(monkeypatch):
     store.clear_cache()
     monkeypatch.setattr(store, "client_factory", lambda: _Client(_Doc(False, None)))
     assert store.get_methodology("nope") is None
+
+
+def test_get_prompt_template_hit_and_miss(monkeypatch):
+    store.clear_cache()
+    doc = _Doc(True, {"system": "STYLE", "version": 1})
+    monkeypatch.setattr(store, "client_factory", lambda: _Client(doc))
+    assert store.get_prompt_template("global-style")["system"] == "STYLE"
+    # second call served from cache even if client breaks
+    monkeypatch.setattr(store, "client_factory", lambda: (_ for _ in ()).throw(RuntimeError))
+    assert store.get_prompt_template("global-style")["system"] == "STYLE"
+
+
+def test_get_prompt_template_missing(monkeypatch):
+    store.clear_cache()
+    monkeypatch.setattr(store, "client_factory", lambda: _Client(_Doc(False, None)))
+    assert store.get_prompt_template("nope") is None
+
+
+def test_template_and_methodology_caches_do_not_collide(monkeypatch):
+    # Same doc id used for both lookups must not return each other's data.
+    store.clear_cache()
+    meth_doc = _Doc(True, {"name": "M"})
+    monkeypatch.setattr(store, "client_factory", lambda: _Client(meth_doc))
+    assert store.get_methodology("dup")["name"] == "M"
+    tmpl_doc = _Doc(True, {"system": "S"})
+    monkeypatch.setattr(store, "client_factory", lambda: _Client(tmpl_doc))
+    assert store.get_prompt_template("dup")["system"] == "S"

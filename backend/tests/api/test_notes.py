@@ -66,6 +66,53 @@ async def test_format_event_without_parts_does_not_crash(monkeypatch):
     assert "event: done" in body
 
 
+def _format_methodology():
+    return {"categories": ["youtube"],
+            "steps": {s: {"enabled": True, "instruction": {"concise": s}}
+                      for s in ["structure", "draft", "augment", "verify", "format"]}}
+
+
+def _capture_system(monkeypatch):
+    captured = {}
+    real_build = notes.build_pipeline
+
+    def fake_build(methodology, mode, provider, model, web_search, system):
+        captured["system"] = system
+        return real_build(methodology, mode, provider, model, web_search, system)
+
+    monkeypatch.setattr(notes, "build_pipeline", fake_build)
+
+    async def fake_drive_adk(agent, initial_state):
+        from types import SimpleNamespace as N
+        yield N(author="step_format", partial=False, content=N(parts=[N(text="# ok")]),
+                grounding_metadata=None, is_final_response=lambda: True)
+
+    monkeypatch.setattr(notes, "_drive_adk", fake_drive_adk)
+    return captured
+
+
+@pytest.mark.asyncio
+async def test_global_style_template_used_as_system(monkeypatch):
+    monkeypatch.setattr(notes, "get_prompt_template",
+                        lambda _id: {"system": "SENTINEL-STYLE"})
+    captured = _capture_system(monkeypatch)
+    body = "".join([c async for c in notes.run_pipeline(
+        _req(), _format_methodology(), notes.get_settings())])
+    assert "event: done" in body
+    assert "SENTINEL-STYLE" in captured["system"]
+
+
+@pytest.mark.asyncio
+async def test_global_style_template_missing_falls_back(monkeypatch):
+    monkeypatch.setattr(notes, "get_prompt_template", lambda _id: None)
+    captured = _capture_system(monkeypatch)
+    body = "".join([c async for c in notes.run_pipeline(
+        _req(), _format_methodology(), notes.get_settings())])
+    assert "event: done" in body
+    assert "provider_error" not in body
+    assert captured["system"]  # non-empty fallback string
+
+
 @pytest.mark.asyncio
 async def test_initial_state_includes_taipei_date(monkeypatch):
     methodology = {"categories": ["youtube"],
