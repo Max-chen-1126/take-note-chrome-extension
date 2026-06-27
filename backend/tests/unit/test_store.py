@@ -85,3 +85,26 @@ def test_template_and_methodology_caches_do_not_collide(monkeypatch):
     tmpl_doc = _Doc(True, {"system": "S"})
     monkeypatch.setattr(store, "client_factory", lambda: _Client(tmpl_doc))
     assert store.get_prompt_template("dup")["system"] == "S"
+
+
+def test_list_methodologies_is_cached(monkeypatch):
+    store.clear_cache()
+    calls = {"n": 0}
+
+    class _StreamColl:
+        def stream(self):
+            calls["n"] += 1
+            return [_Doc(True, {"name": "M", "categories": ["youtube"]}, "m1")]
+
+    class _StreamClient:
+        def collection(self, _name):
+            return _StreamColl()
+
+    monkeypatch.setattr(store, "client_factory", lambda: _StreamClient())
+    first = store.list_methodologies()
+    second = store.list_methodologies()
+    assert first == second
+    assert calls["n"] == 1  # second call served from the TTL cache, not Firestore
+    store.clear_cache()
+    store.list_methodologies()
+    assert calls["n"] == 2  # clear_cache() forces a re-stream

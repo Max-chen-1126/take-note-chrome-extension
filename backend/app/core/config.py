@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     methodology_cache_ttl: int = 300
     max_content_chars: int = 600000
     min_content_chars: int = 200
+    max_body_bytes: int = 4_000_000   # 早期拒絕過大請求 body（413）
 
     @property
     def allowed_email_set(self) -> set[str]:
