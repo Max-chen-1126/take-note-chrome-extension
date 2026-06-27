@@ -1,4 +1,4 @@
-export type Category = "youtube" | "article";
+export type Category = "youtube" | "article" | "coursera";
 export type Mode = "concise" | "detailed";
 export type Provider = "gemini" | "openai" | "claude";
 

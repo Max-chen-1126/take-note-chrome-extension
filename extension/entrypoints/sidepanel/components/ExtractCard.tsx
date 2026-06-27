@@ -3,6 +3,7 @@ import type { ExtractResult } from "../lib/types";
 const CATEGORY_LABELS: Record<ExtractResult["category"], string> = {
   youtube: "YouTube",
   article: "文章",
+  coursera: "Coursera",
 };
 
 export interface ExtractCardProps {

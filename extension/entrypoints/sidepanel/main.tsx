@@ -1,7 +1,6 @@
 import { createRoot } from "react-dom/client";
 import { App, type AppDeps, type MethodologySummary } from "./App";
 import { getMethodologies } from "./lib/api";
-import { getIdToken } from "./lib/auth";
 import { requestExtract, runProcess } from "./lib/messaging";
 import "./styles/tokens.css";
 
@@ -12,13 +11,14 @@ const BACKEND_URL =
   (import.meta as unknown as { env?: Record<string, string> }).env?.WXT_BACKEND_URL ??
   "http://localhost:8080";
 
-// Best-effort: methodologies list is a UI nicety (dropdown options), so a
-// fetch/auth failure here degrades to an empty list rather than blocking the
-// setup page (which still works with the default methodology_id).
+// Best-effort: the methodologies list is a UI nicety (dropdown options). It's
+// fetched WITHOUT a token (the backend's /methodologies is public) so opening
+// the panel never triggers the Google login popup — authentication happens
+// only when the user presses 開始 (the PROCESS flow in background.ts). A
+// fetch failure degrades to an empty list rather than blocking the setup page.
 async function loadMethodologiesBestEffort(): Promise<MethodologySummary[]> {
   try {
-    const token = await getIdToken();
-    const list = await getMethodologies(BACKEND_URL, token);
+    const list = await getMethodologies(BACKEND_URL, null);
     return Array.isArray(list) ? list : [];
   } catch {
     return [];

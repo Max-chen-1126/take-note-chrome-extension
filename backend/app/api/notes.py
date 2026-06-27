@@ -1,4 +1,6 @@
 from collections.abc import AsyncIterator
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -14,7 +16,9 @@ from app.auth.middleware import verify_request
 from app.core.config import get_settings
 from app.schemas.events import sse
 from app.schemas.requests import NoteRequest
-from app.store.firestore import get_methodology
+from app.store.firestore import get_methodology, get_prompt_template
+
+_FALLBACK_SYSTEM = "你是專業的學習筆記整理者，輸出繁體中文 Markdown。"
 
 router = APIRouter()
 _APP_NAME = "take-note"
@@ -40,7 +44,13 @@ async def run_pipeline(req: NoteRequest, methodology, settings) -> AsyncIterator
         yield sse("error", {"code": "methodology_not_found", "message": req.methodology_id})
         return
 
-    system = "你是專業的學習筆記整理者，輸出繁體中文 Markdown。"
+    try:
+        tmpl = get_prompt_template("global-style")
+        system = (tmpl or {}).get("system") or _FALLBACK_SYSTEM
+    except Exception:
+        # Firestore transient/permission failure → degrade gracefully to the
+        # built-in system prompt rather than failing the whole request.
+        system = _FALLBACK_SYSTEM
     try:
         agent = build_pipeline(methodology, req.mode.value, req.provider,
                                req.model, req.web_search, system)
@@ -51,6 +61,7 @@ async def run_pipeline(req: NoteRequest, methodology, settings) -> AsyncIterator
         "source": build_source(req.content),
         "direction": req.direction,
         "extra": req.extra_requirements or "",
+        "date": datetime.now(ZoneInfo("Asia/Taipei")).date().isoformat(),
     }
 
     final_markdown = ""

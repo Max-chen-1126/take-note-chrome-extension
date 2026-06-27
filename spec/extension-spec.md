@@ -5,7 +5,7 @@
 > 本檔遵循 Spec-Driven Development：spec 是一等資產、敘事用 Markdown、深層結構用 YAML、版本號鎖定、護欄右尺寸化。SSE 事件與 `NoteRequest` 與 [`backend-spec.md`](backend-spec.md) 為跨端契約。
 
 ## Context
-後端 Phase A 已完成（Gemini + ADK，`POST /notes/stream` SSE 跑通）。本 spec 細化 extension：React、極簡黑白圓角現代風、開 panel 自動擷取→先呈現擷取內容（唯讀）→使用者按「開始」才處理。初版做**切片**（YouTube + 通用 article）。
+後端 Phase A 已完成（Gemini + ADK，`POST /notes/stream` SSE 跑通）。本 spec 細化 extension：React、極簡黑白圓角現代風、開 panel 自動擷取→先呈現擷取內容（唯讀）→使用者按「開始」才處理。初版擷取 YouTube + 通用 article + Coursera；podcast 視為含 transcript 的網頁（沿用 article 擷取器）。
 
 ## 鎖定決定
 | 項目 | 值 |
@@ -15,18 +15,18 @@
 | 版面/流程 | **雙階段**：設定頁（自動擷取卡 + 設定 + 開始）→ 結果頁（步驟進度 + 串流 Markdown + 複製 + 返回）|
 | 擷取時機 | 開 panel 即自動擷取當前頁，唯讀呈現；按「開始」才送後端 |
 | 擷取可編輯 | 否（唯讀預覽；手動貼上/編輯留 Phase 2）|
-| Auth | App 層：`launchWebAuthFlow` 取 Google ID token（aud=OAuth client_id），後端驗 簽章+client_id+email allowlist；Cloud Run IAM 開 unauth |
-| 初版切片 | Side Panel + **YouTube + 通用 article** 擷取器 + SSE 串流 + 複製；對本地後端跑通 |
-| 延後(Phase 2) | Coursera 擷取、手動貼上/可編輯、auth 正式化、多 provider UI、popup fallback、深色模式 |
+| Auth | 0.1.0：app 層 launchWebAuthFlow 取 ID token（aud=OAuth client_id）+ Bearer；後端驗簽章+aud+allowlist。規劃：Cloud Run IAP。|
+| 初版切片 | Side Panel + **YouTube + 通用 article** 擷取器 + Coursera + SSE 串流 + 複製；對本地後端跑通 |
+| 延後(Phase 2) | 手動貼上/可編輯、auth 正式化、多 provider UI、popup fallback、深色模式 |
 
-> ⚠️ **跨端協調項（必處理）**：App 層認證 = 後端 audience 從 `cloud_run_service_url` 改為 **OAuth client_id**，且 Cloud Run 改 `--allow-unauthenticated`（保護改為純 app 層 token+allowlist）。牴觸後端 Phase A 現況（驗 aud=service URL + K_SERVICE 護欄假設 IAM 認證）。已列入後端 Phase B；extension 實作前需先對齊。
+> **跨端協調（已定）**：0.1.0 採 app 層認證（後端 aud==OAuth client_id）；IAP 為 post-0.1.0 規劃。
 
 ## Objective
 在學習頁面（初版：YouTube、一般文章類網頁）一鍵把內文/transcript 擷取出來，於 Side Panel 確認後送後端生成結構化 Markdown 筆記，逐步串流呈現並一鍵複製。
 
 ## Scope（切片）
-**做**：Side Panel React UI（雙階段）、自動擷取（article + youtube）、唯讀擷取預覽、方法論/模式/方向/查證設定、SSE 串流呈現、一鍵複製、auth（取 ID token 附於請求）。
-**Phase 2**：Coursera 擷取器、擷取內容可編輯 + 手動貼上 fallback、provider/model 選擇 UI、深色模式、popup fallback。
+**做**：Side Panel React UI（雙階段）、自動擷取（article + youtube + Coursera 擷取）、唯讀擷取預覽、方法論/模式/方向/查證設定、SSE 串流呈現、一鍵複製、auth（取 ID token 附於請求）。podcast 類網頁沿用 article 擷取器。
+**Phase 2**：擷取內容可編輯 + 手動貼上 fallback、provider/model 選擇 UI、深色模式、popup fallback。
 
 ## Visual Design Language（黑白圓角現代）
 ```yaml
@@ -83,12 +83,14 @@ extension/
         messaging.ts            # 與 background/content 的型別化訊息
         types.ts                # 跨端型別（NoteRequest、SSE 事件、ExtractResult）
       styles/tokens.css         # 設計 tokens
-    content/
-      index.ts                  # dispatcher：依 URL 選擇擷取器，回 ExtractResult
-      extractors/
-        article.ts              # @mozilla/readability 抽主要內文
-        youtube.ts              # captionTracks json3（MAIN world）+ DOM 面板 fallback
-      world-main.ts             # 注入 MAIN world 讀 ytInitialPlayerResponse
+    content.ts                  # dispatcher：依 URL 路由 youtube/coursera/article 擷取器，回 ExtractResult
+    youtube-main.content.ts     # 注入 MAIN world 讀 ytInitialPlayerResponse
+  src/
+    extractors/
+      dispatch.ts              # URL → 擷取器判斷邏輯
+      article.ts               # @mozilla/readability 抽主要內文
+      youtube.ts               # captionTracks json3（MAIN world）+ DOM 面板 fallback
+      coursera.ts              # Transcript 面板 DOM 擷取（見 Extraction Methods）
   tests/
     extractors/                 # HTML fixtures 單元測試
     lib/                        # SSE 解析、messaging
@@ -102,7 +104,7 @@ background → content(active tab): { type: "EXTRACT" }
 content → background → panel:     { type: "EXTRACT_RESULT", payload: ExtractResult }
 ExtractResult:
   ok: bool
-  category: "youtube" | "article"
+  category: "youtube" | "article" | "coursera"
   content: { title: string, url: string, text: string, metadata: object|null }
   error: { code: string, message: string } | null
 panel → background:  { type: "PROCESS", payload: NoteRequest }     # 按開始
@@ -111,11 +113,13 @@ background → panel:  { type: "SSE", event: "step|delta|citations|done|error", 
 - background 持有對後端的 SSE fetch；串流期間以 port 保持 panel 連線（MV3 SW 生命週期下）；斷線→ error 並保留已收內容。
 - `NoteRequest` / SSE 事件型別與 [`backend-spec.md`](backend-spec.md) 跨端契約一致，不可單方更動。
 
-## Auth Flow（App 層）
-- `chrome.identity.launchWebAuthFlow`：Web OAuth client，`response_type=id_token`、`scope=openid email`，取得 Google **ID token**（`aud = OAuth client_id`）。
+## Auth Flow（app 層）
+- 0.1.0 採 app 層認證（見 [`backend-spec.md`](backend-spec.md) §8）。
+- `chrome.identity.launchWebAuthFlow`：用 **Web OAuth client** 當 aud，`response_type=id_token`、`scope=openid email`，取得 Google **ID token**（`aud` = OAuth client_id）。
 - `/notes/stream`、`/methodologies` 請求帶 `Authorization: Bearer <id_token>`。
 - token 快取於記憶體 + `chrome.storage.session`；過期(401)觸發重新授權。
-- **後端對齊（協調項）**：驗 `aud == client_id`（非 service URL）；Cloud Run `--allow-unauthenticated`。
+- 後端驗 ID token 簽章 + `aud == OAUTH_CLIENT_ID` + email allowlist。
+> 規劃：改走 Cloud Run IAP（aud=IAP 程式化 client_id）。
 
 ## Extraction Methods
 ```yaml
@@ -129,8 +133,14 @@ youtube:
   fallback:
     - baseUrl 含 &exp=xpe 或回空 body → 改抓已渲染的「Show transcript」面板 DOM segments
   metadata: { title, channel, videoId, lang }
+coursera:
+  detect: hostname endsWith coursera.org 且 pathname 含 /learn/ 與 /lecture/
+  transcript: 取第一個 .rc-Transcript 內 .rc-Phrase .css-mlsl36 文字，去 U+200B 零寬空格、U+00A0 轉空格、collapse 空白；不含 timestamp
+  title: h1.video-name（fallback document.title）
+  fallback: 找不到 .rc-Transcript / 空 → extract_error，提示開啟 Transcript 面板後重試
 ```
 > **注意事項**：(a) `&exp=xpe`(PoToken) 會讓 timedtext 回空 → 必須有 DOM 面板 fallback；(b) `ytInitialPlayerResponse` 在 MAIN world，content script 預設 isolated → 用 WXT `world:"MAIN"` 注入或解析頁面 script；(c) 兩路徑皆失敗 → `extract_error`（切片不做手動貼上，提示使用者開啟字幕面板後重試）。
+> podcast 無獨立擷取器，沿用 article（Readability 抓網頁內文/transcript）。
 
 ## SSE Consumption（`lib/api.ts`）
 - 用 `fetch` + `ReadableStream` reader 解析 `text/event-stream`（非 `EventSource`，因需帶 `Authorization` header 與 POST body）。
@@ -160,4 +170,4 @@ dev:
 - 只做擷取 + UI + 串流呈現 + 複製；不做 AI、不直接呼叫任何 LLM vendor。
 - 不做 STT、不持久化筆記。
 - 唯一對外：後端 `/notes/stream`、`/methodologies`。
-- 初版只 youtube + article；Coursera / 可編輯 / 多 provider UI 延後。
+- 初版 youtube + article + coursera；可編輯/多 provider UI/深色模式延後。

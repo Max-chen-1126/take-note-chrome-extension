@@ -1,6 +1,7 @@
 import type { ExtractContent, ExtractResult, Msg } from "./sidepanel/lib/types";
 import { categorize } from "../src/extractors/dispatch";
 import { extractArticle } from "../src/extractors/article";
+import { extractCoursera } from "../src/extractors/coursera";
 import { pickCaptionBaseUrl, needsFallback, parseJson3, parsePanelDom } from "../src/extractors/youtube";
 
 // Handshake namespace shared with youtube-main.content.ts (MAIN world). Kept
@@ -65,7 +66,9 @@ async function runExtract(): Promise<ExtractResult> {
   const category = categorize(url);
   try {
     const content =
-      category === "youtube" ? await extractYoutube(url) : extractArticle(document, url);
+      category === "youtube" ? await extractYoutube(url)
+      : category === "coursera" ? extractCoursera(document, url)
+      : extractArticle(document, url);
     return { ok: true, category, content, error: null };
   } catch (err) {
     return {
