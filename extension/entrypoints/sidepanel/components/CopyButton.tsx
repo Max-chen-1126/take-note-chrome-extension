@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { Check, Copy } from "lucide-react";
+import { Button } from "./ui/Button";
 
 export interface CopyButtonProps {
   text: string;
@@ -20,22 +22,14 @@ export function CopyButton({ text }: CopyButtonProps) {
   }
 
   return (
-    <button
-      type="button"
-      onClick={handleClick}
-      style={{
-        fontFamily: "var(--tn-font)",
-        fontSize: 14,
-        fontWeight: 600,
-        padding: "8px 16px",
-        borderRadius: "var(--tn-r-control)",
-        border: "1px solid var(--tn-primary)",
-        background: copied ? "var(--tn-surface)" : "var(--tn-primary)",
-        color: copied ? "var(--tn-text)" : "var(--tn-on-primary)",
-        cursor: "pointer",
-      }}
-    >
-      {copied ? "已複製" : "⧉ 複製"}
-    </button>
+    <Button variant="outline" size="sm" icon={copied ? Check : Copy} onClick={handleClick}>
+      {copied ? (
+        <span role="status" aria-live="polite">
+          已複製
+        </span>
+      ) : (
+        "複製"
+      )}
+    </Button>
   );
 }
