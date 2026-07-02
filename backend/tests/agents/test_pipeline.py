@@ -35,3 +35,23 @@ def test_skips_disabled_step():
     names = [a.name for a in agent.sub_agents]
     assert "step_augment" not in names
     assert "augment-d" not in "".join(a.instruction for a in agent.sub_agents)
+
+
+def test_hygiene_placeholder_resolved(monkeypatch):
+    monkeypatch.setenv("FOO", "bar")
+    m = _methodology()
+    m["steps"]["structure"]["instruction"] = {"concise": "use [[FOO]]", "detailed": "d"}
+    agent = build_pipeline(m, "concise", Provider.gemini, None, False, "SYS")
+    step = next(a for a in agent.sub_agents if a.name == "step_structure")
+    assert "use bar" in step.instruction
+    assert "[[FOO]]" not in step.instruction
+
+
+def test_hygiene_unresolved_var_blanks_not_leaks_placeholder(monkeypatch):
+    monkeypatch.delenv("MISSING_VAR", raising=False)
+    m = _methodology()
+    m["steps"]["structure"]["instruction"] = {"concise": "id=[[MISSING_VAR]]", "detailed": "d"}
+    agent = build_pipeline(m, "concise", Provider.gemini, None, False, "SYS")
+    step = next(a for a in agent.sub_agents if a.name == "step_structure")
+    assert "[[MISSING_VAR]]" not in step.instruction
+    assert "id=" in step.instruction

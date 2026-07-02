@@ -1,0 +1,39 @@
+# Cloud Build config for manual, triggered deploys of take-note-backend to Cloud Run.
+# Invoked only by a manually-run Cloud Build trigger (see
+# infra/cloudbuild-deploy/README.md) — never on push, so merges to main don't
+# silently redeploy.
+steps:
+  - name: gcr.io/cloud-builders/docker
+    dir: backend
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}
+      - .
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}
+      - --region=${_REGION}
+      - --allow-unauthenticated
+      - --timeout=3600
+      - --max-instances=${_MAX_INSTANCES}
+      - --concurrency=8
+      - --service-account=${_RUNTIME_SA}
+      - --set-env-vars=OAUTH_CLIENT_ID=${_OAUTH_CLIENT_ID},ALLOWED_EMAILS=${_ALLOWED_EMAILS},GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GOOGLE_GENAI_USE_VERTEXAI=TRUE,GOOGLE_CLOUD_LOCATION=global,EXPECTED_MAX_INSTANCES=${_MAX_INSTANCES}
+images:
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}
+options:
+  logging: CLOUD_LOGGING_ONLY
+substitutions:
+  _REGION: asia-east1
+  _REPO: take-note-backend
+  _SERVICE: take-note-backend
+  _MAX_INSTANCES: "1"

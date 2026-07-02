@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     max_content_chars: int = 600000
     min_content_chars: int = 200
     max_body_bytes: int = 4_000_000   # 早期拒絕過大請求 body（413）
+    expected_max_instances: int = 1   # 見 §rate limiter guard：in-memory limiter 僅在單一實例下正確
 
     @property
     def allowed_email_set(self) -> set[str]:
@@ -33,6 +34,19 @@ class Settings(BaseSettings):
             raise ValueError(
                 "OAUTH_CLIENT_ID must be set when running under Cloud Run "
                 "(K_SERVICE is set) — required for ID token audience verification."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _require_single_instance_for_in_memory_limiter(self) -> "Settings":
+        # backend/app/core/limiter.py 用 slowapi 的 in-memory storage，只有在
+        # 剛好一個 Cloud Run 實例時才是正確的 per-IP 上限。若要調高
+        # max-instances，必須先把 limiter 換成分散式儲存（如
+        # Redis/Memorystore），而不是默默調高這個值。
+        if self.expected_max_instances != 1:
+            raise ValueError(
+                "expected_max_instances must stay 1 until the rate limiter is "
+                "migrated off in-memory storage (see backend/app/core/limiter.py)."
             )
         return self
 

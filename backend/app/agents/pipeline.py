@@ -2,6 +2,7 @@ from google.adk.agents import LlmAgent, SequentialAgent
 
 from app.agents.models import build_model
 from app.agents.tools import web_search_tools
+from app.core.hygiene import resolve as resolve_hygiene
 from app.schemas.requests import Provider
 
 STEP_ORDER = ["structure", "draft", "augment", "verify", "format"]
@@ -34,6 +35,7 @@ def build_pipeline(methodology, mode, provider: Provider, model_id, web_search, 
         contract = cfg.get("output_contract")
         if name == "format" and contract:
             instruction = f"{instruction}\n\n# 輸出規範（嚴格遵守）\n{contract}"
+        instruction = resolve_hygiene(instruction)
         sub_agents.append(LlmAgent(
             name=f"step_{name}",
             model=model,
