@@ -1,4 +1,6 @@
 :root {
+  color-scheme: light dark;
+
   /* Primitive scale — internal to this file, never referenced directly by
      components. Semantic tokens below are the public API. */
   --tn-gray-0: #FFFFFF;
@@ -100,6 +102,12 @@
   }
 }
 
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--tn-bg);
+}
+
 .tn-app {
   font-family: var(--tn-font);
   color: var(--tn-text);
@@ -197,4 +205,35 @@
 
 .tn-markdown-view li + li {
   margin-top: var(--tn-space-1);
+}
+
+.tn-markdown-view table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 var(--tn-space-3);
+  font-size: 0.95em;
+}
+
+.tn-markdown-view th,
+.tn-markdown-view td {
+  border: 1px solid var(--tn-border);
+  padding: var(--tn-space-2) var(--tn-space-3);
+  text-align: left;
+}
+
+.tn-markdown-view th {
+  background: var(--tn-surface-2);
+  font-weight: var(--tn-weight-semibold);
+}
+
+.tn-markdown-view img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--tn-r-control);
+}
+
+.tn-markdown-view hr {
+  border: none;
+  border-top: 1px solid var(--tn-border);
+  margin: var(--tn-space-4) 0;
 }
