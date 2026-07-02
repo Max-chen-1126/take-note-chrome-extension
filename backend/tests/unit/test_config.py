@@ -37,3 +37,18 @@ def test_not_cloud_run_without_oauth_client_id_ok(monkeypatch):
     cfg.get_settings.cache_clear()
     settings = cfg.get_settings()
     assert settings.oauth_client_id == ""
+
+
+def test_expected_max_instances_default_is_one(monkeypatch):
+    monkeypatch.delenv("EXPECTED_MAX_INSTANCES", raising=False)
+    cfg.get_settings.cache_clear()
+    assert cfg.get_settings().expected_max_instances == 1
+
+
+def test_expected_max_instances_above_one_raises(monkeypatch):
+    monkeypatch.setenv("EXPECTED_MAX_INSTANCES", "2")
+    cfg.get_settings.cache_clear()
+    with pytest.raises(ValueError):
+        cfg.get_settings()
+    monkeypatch.delenv("EXPECTED_MAX_INSTANCES", raising=False)
+    cfg.get_settings.cache_clear()
