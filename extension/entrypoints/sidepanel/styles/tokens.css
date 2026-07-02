@@ -237,3 +237,19 @@ body {
   border-top: 1px solid var(--tn-border);
   margin: var(--tn-space-4) 0;
 }
+
+.tn-btn {
+  transition: background-color 0.15s ease;
+}
+
+.tn-btn-primary { background: var(--tn-accent); }
+.tn-btn-primary:hover:not(:disabled) { background: var(--tn-accent-hover); }
+.tn-btn-primary:active:not(:disabled) { background: var(--tn-accent-active); }
+
+.tn-btn-outline { background: var(--tn-bg); }
+.tn-btn-outline:hover:not(:disabled) { background: var(--tn-surface); }
+.tn-btn-outline:active:not(:disabled) { background: var(--tn-surface-2); }
+
+.tn-btn-ghost { background: transparent; }
+.tn-btn-ghost:hover:not(:disabled) { background: var(--tn-surface); }
+.tn-btn-ghost:active:not(:disabled) { background: var(--tn-surface-2); }

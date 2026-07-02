@@ -20,3 +20,16 @@ it("renders an icon as aria-hidden so it never joins the accessible name", () =>
   const icon = button.querySelector("svg");
   expect(icon).toHaveAttribute("aria-hidden", "true");
 });
+
+it("applies the variant class name alongside the base tn-btn class", () => {
+  render(<Button variant="outline">按鈕</Button>);
+  const button = screen.getByRole("button", { name: "按鈕" });
+  expect(button.className).toContain("tn-btn");
+  expect(button.className).toContain("tn-btn-outline");
+});
+
+it("defaults to the primary variant class", () => {
+  render(<Button>按鈕</Button>);
+  const button = screen.getByRole("button", { name: "按鈕" });
+  expect(button.className).toContain("tn-btn-primary");
+});

@@ -12,20 +12,23 @@ export interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement
 
 const VARIANT_STYLE: Record<NonNullable<ButtonProps["variant"]>, CSSProperties> = {
   primary: {
-    background: "var(--tn-accent)",
     color: "var(--tn-on-accent)",
     border: "1px solid transparent",
   },
   outline: {
-    background: "var(--tn-bg)",
     color: "var(--tn-text)",
     border: "1px solid var(--tn-border)",
   },
   ghost: {
-    background: "transparent",
     color: "var(--tn-text)",
     border: "1px solid transparent",
   },
+};
+
+const VARIANT_CLASS: Record<NonNullable<ButtonProps["variant"]>, string> = {
+  primary: "tn-btn-primary",
+  outline: "tn-btn-outline",
+  ghost: "tn-btn-ghost",
 };
 
 const SIZE_STYLE: Record<NonNullable<ButtonProps["size"]>, CSSProperties> = {
@@ -42,6 +45,7 @@ export function Button({
   type = "button",
   disabled,
   style,
+  className,
   children,
   ...rest
 }: ButtonProps) {
@@ -49,6 +53,7 @@ export function Button({
     <button
       type={type}
       disabled={disabled}
+      className={["tn-btn", VARIANT_CLASS[variant], className].filter(Boolean).join(" ")}
       style={{
         display: "inline-flex",
         alignItems: "center",
