@@ -13,3 +13,15 @@ it("renders 5 step labels and marks active", () => {
   const pending = screen.getByText("補充");
   expect(pending.closest("[data-state]")).toHaveAttribute("data-state", "pending");
 });
+
+it("renders a checkmark icon for done steps and a pulsing dot for the active step", () => {
+  render(<StepProgress active="draft" doneSteps={["structure"]} />);
+
+  const doneItem = screen.getByText("整理").closest("li")!;
+  expect(doneItem.querySelector("svg")).toBeTruthy();
+  expect(doneItem.querySelector(".tn-step-dot--active")).toBeNull();
+
+  const activeItem = screen.getByText("草稿").closest("li")!;
+  expect(activeItem.querySelector(".tn-step-dot--active")).toBeTruthy();
+  expect(activeItem.querySelector("svg")).toBeNull();
+});

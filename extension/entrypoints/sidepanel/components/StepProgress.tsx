@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { Check } from "lucide-react";
 import type { StepName } from "../lib/types";
 import { STEP_LABELS } from "../lib/types";
 
@@ -22,7 +23,6 @@ const dotStyle = (state: StepState): CSSProperties => ({
   height: 8,
   borderRadius: "var(--tn-r-pill)",
   background: state === "pending" ? "var(--tn-border)" : "var(--tn-accent)",
-  opacity: state === "active" ? 1 : state === "done" ? 0.6 : 1,
 });
 
 export function StepProgress({ active, doneSteps }: StepProgressProps) {
@@ -53,7 +53,16 @@ export function StepProgress({ active, doneSteps }: StepProgressProps) {
               fontSize: 12,
             }}
           >
-            <span aria-hidden="true" style={dotStyle(state)} />
+            <span className="tn-step-marker" aria-hidden="true">
+              {state === "done" ? (
+                <Check size={10} strokeWidth={3} className="tn-step-check" style={{ color: "var(--tn-accent)" }} />
+              ) : (
+                <span
+                  className={state === "active" ? "tn-step-dot--active" : undefined}
+                  style={dotStyle(state)}
+                />
+              )}
+            </span>
             <span>{STEP_LABELS[step]}</span>
           </li>
         );

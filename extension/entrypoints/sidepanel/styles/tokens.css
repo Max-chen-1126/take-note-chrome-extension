@@ -48,6 +48,8 @@
   --tn-primary: var(--tn-gray-950);
   --tn-on-primary: var(--tn-gray-0);
 
+  --tn-accent-glow: rgba(79, 70, 229, 0.35);
+
   /* Typography scale (consumed directly in real CSS, e.g. .tn-markdown-view
      rules below — NOT inside inline style={} objects, see plan's Global
      Constraints). */
@@ -99,6 +101,8 @@
 
     --tn-primary: #FAFAFA;
     --tn-on-primary: var(--tn-gray-950);
+
+    --tn-accent-glow: rgba(129, 140, 248, 0.35);
   }
 }
 
@@ -253,3 +257,33 @@ body {
 .tn-btn-ghost { background: transparent; }
 .tn-btn-ghost:hover:not(:disabled) { background: var(--tn-surface); }
 .tn-btn-ghost:active:not(:disabled) { background: var(--tn-surface-2); }
+
+@keyframes tn-step-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--tn-accent-glow); }
+  50% { box-shadow: 0 0 0 4px var(--tn-accent-glow); }
+}
+.tn-step-dot--active {
+  animation: tn-step-pulse 1.6s ease-in-out infinite;
+}
+
+.tn-step-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+}
+
+@keyframes tn-step-check-in {
+  from { transform: scale(0.4); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.tn-step-check {
+  animation: tn-step-check-in 0.2s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tn-step-dot--active { animation: none; }
+  .tn-step-check { animation: none; }
+}
