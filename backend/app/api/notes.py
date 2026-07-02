@@ -19,6 +19,12 @@ from app.schemas.events import sse
 from app.schemas.requests import NoteRequest
 from app.store.firestore import get_methodology, get_prompt_template
 
+import logging
+
+from app.core.logging import log_event
+
+logger = logging.getLogger("app.notes")
+
 _FALLBACK_SYSTEM = "你是專業的學習筆記整理者，輸出繁體中文 Markdown。"
 
 router = APIRouter()
@@ -42,6 +48,7 @@ async def _drive_adk(agent, initial_state: dict) -> AsyncIterator:
 
 async def run_pipeline(req: NoteRequest, methodology, settings) -> AsyncIterator[str]:
     if methodology is None:
+        log_event(logger, logging.WARNING, "pipeline_error", code="methodology_not_found")
         yield sse("error", {"code": "methodology_not_found", "message": req.methodology_id})
         return
 
@@ -56,6 +63,7 @@ async def run_pipeline(req: NoteRequest, methodology, settings) -> AsyncIterator
         agent = build_pipeline(methodology, req.mode.value, req.provider,
                                req.model, req.web_search, system)
     except ProviderNotImplemented as exc:
+        log_event(logger, logging.WARNING, "pipeline_error", code="provider_not_implemented")
         yield sse("error", {"code": "provider_not_implemented", "message": str(exc)})
         return
     initial_state = {
@@ -72,9 +80,13 @@ async def run_pipeline(req: NoteRequest, methodology, settings) -> AsyncIterator
             author = getattr(event, "author", "")
             if author != last_author and author.startswith("step_"):
                 if last_author:
-                    yield sse("step", {"step": last_author.removeprefix("step_"),
+                    step_name = last_author.removeprefix("step_")
+                    log_event(logger, logging.INFO, "pipeline_step", step=step_name, status="done")
+                    yield sse("step", {"step": step_name,
                                        "status": "done", "summary": None})
-                yield sse("step", {"step": author.removeprefix("step_"), "status": "start"})
+                step_name = author.removeprefix("step_")
+                log_event(logger, logging.INFO, "pipeline_step", step=step_name, status="start")
+                yield sse("step", {"step": step_name, "status": "start"})
                 last_author = author
             gm = getattr(event, "grounding_metadata", None)
             if gm:
@@ -92,10 +104,13 @@ async def run_pipeline(req: NoteRequest, methodology, settings) -> AsyncIterator
                 elif event.is_final_response() and text:
                     final_markdown = text
         if last_author:
-            yield sse("step", {"step": last_author.removeprefix("step_"),
-                               "status": "done", "summary": None})
+            step_name = last_author.removeprefix("step_")
+            log_event(logger, logging.INFO, "pipeline_step", step=step_name, status="done")
+            yield sse("step", {"step": step_name, "status": "done", "summary": None})
+        log_event(logger, logging.INFO, "pipeline_done", markdown_chars=len(final_markdown))
         yield sse("done", {"markdown": final_markdown})
     except Exception as exc:  # provider/runtime 錯誤 → error 事件，保留已串內容
+        log_event(logger, logging.ERROR, "pipeline_error", code="provider_error", message=str(exc))
         yield sse("error", {"code": "provider_error", "message": str(exc)})
 
 
