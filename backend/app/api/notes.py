@@ -1,3 +1,4 @@
+import time
 from collections.abc import AsyncIterator
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -47,6 +48,7 @@ async def _drive_adk(agent, initial_state: dict) -> AsyncIterator:
 
 
 async def run_pipeline(req: NoteRequest, methodology, settings) -> AsyncIterator[str]:
+    start = time.monotonic()
     if methodology is None:
         log_event(logger, logging.WARNING, "pipeline_error", code="methodology_not_found")
         yield sse("error", {"code": "methodology_not_found", "message": req.methodology_id})
@@ -107,10 +109,12 @@ async def run_pipeline(req: NoteRequest, methodology, settings) -> AsyncIterator
             step_name = last_author.removeprefix("step_")
             log_event(logger, logging.INFO, "pipeline_step", step=step_name, status="done")
             yield sse("step", {"step": step_name, "status": "done", "summary": None})
-        log_event(logger, logging.INFO, "pipeline_done", markdown_chars=len(final_markdown))
+        log_event(logger, logging.INFO, "pipeline_done", markdown_chars=len(final_markdown),
+                 elapsed_ms=round((time.monotonic() - start) * 1000, 1))
         yield sse("done", {"markdown": final_markdown})
     except Exception as exc:  # provider/runtime 錯誤 → error 事件，保留已串內容
-        log_event(logger, logging.ERROR, "pipeline_error", code="provider_error", message=str(exc))
+        log_event(logger, logging.ERROR, "pipeline_error", code="provider_error",
+                 error_message=str(exc))
         yield sse("error", {"code": "provider_error", "message": str(exc)})
 
 
