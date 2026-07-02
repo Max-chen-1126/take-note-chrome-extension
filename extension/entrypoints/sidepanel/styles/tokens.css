@@ -46,11 +46,6 @@
   --tn-primary: var(--tn-gray-950);
   --tn-on-primary: var(--tn-gray-0);
 
-  /* Deprecated alias — kept ONLY during the design-system migration (Task 2
-     through Task 11), removed in Task 12's cleanup once no component
-     references it directly anymore. Use --tn-text-muted in new code. */
-  --tn-muted: var(--tn-text-muted);
-
   /* Typography scale (consumed directly in real CSS, e.g. .tn-markdown-view
      rules below — NOT inside inline style={} objects, see plan's Global
      Constraints). */
@@ -102,11 +97,6 @@
 
     --tn-primary: #FAFAFA;
     --tn-on-primary: var(--tn-gray-950);
-
-    /* --tn-muted intentionally NOT redeclared here: its value is the raw
-       token `var(--tn-text-muted)`, which is re-evaluated at point of use
-       against whatever --tn-text-muted currently resolves to (this dark
-       block's value) — no separate override needed. */
   }
 }
 
