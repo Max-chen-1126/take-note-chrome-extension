@@ -7,6 +7,7 @@ export interface CopyButtonProps {
 }
 
 const COPIED_DURATION_MS = 1500;
+const COPIED_ANNOUNCEMENT = "已複製內容";
 
 export function CopyButton({ text }: CopyButtonProps) {
   const [copied, setCopied] = useState(false);
@@ -22,14 +23,13 @@ export function CopyButton({ text }: CopyButtonProps) {
   }
 
   return (
-    <Button variant="outline" size="sm" icon={copied ? Check : Copy} onClick={handleClick}>
-      {copied ? (
-        <span role="status" aria-live="polite">
-          已複製
-        </span>
-      ) : (
-        "複製"
-      )}
-    </Button>
+    <>
+      <Button variant="outline" size="sm" icon={copied ? Check : Copy} onClick={handleClick}>
+        {copied ? "已複製" : "複製"}
+      </Button>
+      <span role="status" aria-live="polite" className="tn-visually-hidden">
+        {copied ? COPIED_ANNOUNCEMENT : ""}
+      </span>
+    </>
   );
 }
