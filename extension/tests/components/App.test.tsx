@@ -114,3 +114,41 @@ it("shows stream_error mid-stream while preserving already-streamed content", as
   // Already-streamed delta content remains visible.
   expect(screen.getByText("已經串到一半的內容。")).toBeTruthy();
 });
+
+it("retries extraction from extract_error via the retry button", async () => {
+  const failResult = {
+    ok: false,
+    category: "article" as const,
+    content: { title: "", url: "https://example.com", text: "", metadata: null },
+    error: { code: "extract_failed", message: "無法讀取字幕，請開啟字幕面板後重試。" },
+  };
+  const extract = vi.fn().mockResolvedValueOnce(failResult).mockResolvedValueOnce(extractResult);
+  const deps = makeDeps({ extract });
+  render(<App deps={deps} />);
+
+  expect(await screen.findByText(/無法讀取字幕/)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: /重試/ }));
+
+  expect(await screen.findByText("測試影片標題")).toBeTruthy();
+  expect(extract).toHaveBeenCalledTimes(2);
+});
+
+it("retries the stream from stream_error via the retry button", async () => {
+  const process = vi
+    .fn()
+    .mockImplementationOnce(() => errorMidStreamEvents())
+    .mockImplementationOnce(() => happyPathEvents());
+  const deps = makeDeps({ process });
+  render(<App deps={deps} />);
+
+  await screen.findByText("測試影片標題");
+  fireEvent.click(screen.getByRole("button", { name: /開始/ }));
+
+  expect(await screen.findByText(/上游服務錯誤/)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: /重試/ }));
+
+  await waitFor(() => {
+    expect(screen.getByText("這是內容第一段。")).toBeTruthy();
+  });
+  expect(process).toHaveBeenCalledTimes(2);
+});

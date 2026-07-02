@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState } from "react";
+import { ChevronLeft, Sparkles } from "lucide-react";
 import { ExtractCard } from "./components/ExtractCard";
 import { SettingsForm, type SettingsFormValue } from "./components/SettingsForm";
 import { StepProgress } from "./components/StepProgress";
 import { MarkdownView } from "./components/MarkdownView";
 import { CopyButton } from "./components/CopyButton";
+import { ErrorState } from "./components/ErrorState";
+import { Spinner } from "./components/ui/Spinner";
+import { Button } from "./components/ui/Button";
 import type { ExtractResult, NoteRequest, SseEvent, StepName } from "./lib/types";
 
 export interface MethodologySummary {
@@ -45,40 +49,6 @@ const pageStyle: React.CSSProperties = {
   padding: 16,
 };
 
-const primaryButtonStyle: React.CSSProperties = {
-  fontFamily: "var(--tn-font)",
-  fontSize: 15,
-  fontWeight: 700,
-  padding: "12px 16px",
-  borderRadius: "var(--tn-r-control)",
-  border: "none",
-  background: "var(--tn-primary)",
-  color: "var(--tn-on-primary)",
-  cursor: "pointer",
-  width: "100%",
-};
-
-const ghostButtonStyle: React.CSSProperties = {
-  fontFamily: "var(--tn-font)",
-  fontSize: 13,
-  fontWeight: 600,
-  padding: "6px 4px",
-  border: "none",
-  background: "transparent",
-  color: "var(--tn-text)",
-  cursor: "pointer",
-  alignSelf: "flex-start",
-};
-
-const errorBoxStyle: React.CSSProperties = {
-  border: "1px solid var(--tn-border)",
-  borderRadius: "var(--tn-r-card)",
-  padding: 16,
-  background: "var(--tn-surface)",
-  color: "var(--tn-text)",
-  fontSize: 14,
-};
-
 export function App({ deps }: { deps: AppDeps }) {
   const [state, setState] = useState<AppState>({ phase: "extracting" });
   const [methodologies, setMethodologies] = useState<MethodologySummary[]>([]);
@@ -92,7 +62,8 @@ export function App({ deps }: { deps: AppDeps }) {
   // state from a still-in-flight previous stream.
   const runIdRef = useRef(0);
 
-  useEffect(() => {
+  function runExtract() {
+    setState({ phase: "extracting" });
     deps
       .extract()
       .then((result) => {
@@ -111,6 +82,10 @@ export function App({ deps }: { deps: AppDeps }) {
           error: { code: "extract_failed", message: err instanceof Error ? err.message : String(err) },
         });
       });
+  }
+
+  useEffect(() => {
+    runExtract();
 
     deps
       .loadMethodologies()
@@ -121,7 +96,9 @@ export function App({ deps }: { deps: AppDeps }) {
   }, []);
 
   async function handleStart() {
-    if (state.phase !== "ready") return;
+    // Callable both from the ready-phase primary CTA and from the stream_error
+    // retry button; both phases carry a `result` to restart the stream from.
+    if (state.phase !== "ready" && state.phase !== "stream_error") return;
     const result = state.result;
     const runId = ++runIdRef.current;
 
@@ -195,7 +172,21 @@ export function App({ deps }: { deps: AppDeps }) {
   if (state.phase === "extracting") {
     return (
       <div className="tn-app" style={pageStyle}>
-        <p>擷取中…</p>
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            minHeight: 200,
+          }}
+        >
+          <Spinner size={24} />
+          <p style={{ margin: 0, fontSize: 14, color: "var(--tn-text-muted)" }}>擷取中…</p>
+        </div>
       </div>
     );
   }
@@ -203,11 +194,12 @@ export function App({ deps }: { deps: AppDeps }) {
   if (state.phase === "extract_error") {
     return (
       <div className="tn-app" style={pageStyle}>
-        <div style={errorBoxStyle}>
-          <p style={{ margin: 0, fontWeight: 600 }}>擷取失敗</p>
-          <p style={{ margin: "8px 0 0", color: "var(--tn-muted)" }}>{state.error.message}</p>
-          <p style={{ margin: "8px 0 0", color: "var(--tn-muted)" }}>請重新整理頁面或換一個頁面後再試。</p>
-        </div>
+        <ErrorState
+          title="擷取失敗"
+          message={state.error.message}
+          hint="請重新整理頁面或換一個頁面後再試。"
+          onRetry={runExtract}
+        />
       </div>
     );
   }
@@ -217,9 +209,9 @@ export function App({ deps }: { deps: AppDeps }) {
       <div className="tn-app" style={pageStyle}>
         <ExtractCard result={state.result} />
         <SettingsForm methodologies={methodologies} value={settings} onChange={setSettings} />
-        <button type="button" style={primaryButtonStyle} onClick={handleStart}>
-          ▶ 開始處理
-        </button>
+        <Button variant="primary" icon={Sparkles} fullWidth onClick={handleStart}>
+          開始處理
+        </Button>
       </div>
     );
   }
@@ -229,27 +221,17 @@ export function App({ deps }: { deps: AppDeps }) {
 
   return (
     <div className="tn-app" style={pageStyle}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 8,
-        }}
-      >
-        <button type="button" style={ghostButtonStyle} onClick={handleBack}>
-          ‹ 返回
-        </button>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <Button variant="ghost" size="sm" icon={ChevronLeft} onClick={handleBack}>
+          返回
+        </Button>
         {state.phase === "done" && <CopyButton text={markdownToShow} />}
       </div>
 
       <StepProgress active={activeStep} doneSteps={doneSteps} />
 
       {state.phase === "stream_error" && (
-        <div style={errorBoxStyle}>
-          <p style={{ margin: 0, fontWeight: 600 }}>串流發生錯誤</p>
-          <p style={{ margin: "8px 0 0", color: "var(--tn-muted)" }}>{state.error.message}</p>
-        </div>
+        <ErrorState title="串流發生錯誤" message={state.error.message} onRetry={handleStart} />
       )}
 
       <MarkdownView markdown={markdownToShow} />

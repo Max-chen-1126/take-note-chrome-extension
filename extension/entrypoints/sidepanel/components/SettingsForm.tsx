@@ -1,4 +1,9 @@
 import type { Mode } from "../lib/types";
+import { FormField } from "./ui/FormField";
+import { Select } from "./ui/Select";
+import { TextInput } from "./ui/TextInput";
+import { SegmentedControl } from "./ui/SegmentedControl";
+import { Toggle } from "./ui/Toggle";
 
 export interface Methodology {
   id: string;
@@ -26,21 +31,10 @@ const MODE_OPTIONS: { value: Mode; label: string }[] = [
 ];
 
 const labelStyle = {
-  fontSize: 12,
-  color: "var(--tn-muted)",
-  fontWeight: 600,
-};
-
-const controlStyle = {
   fontFamily: "var(--tn-font)",
-  fontSize: 14,
-  color: "var(--tn-text)",
-  background: "var(--tn-bg)",
-  border: "1px solid var(--tn-border)",
-  borderRadius: "var(--tn-r-control)",
-  padding: "8px 12px",
-  width: "100%",
-  boxSizing: "border-box" as const,
+  fontSize: 12,
+  fontWeight: 600,
+  color: "var(--tn-text-muted)",
 };
 
 export function SettingsForm({ methodologies, value, onChange }: SettingsFormProps) {
@@ -59,121 +53,42 @@ export function SettingsForm({ methodologies, value, onChange }: SettingsFormPro
       }}
       onSubmit={(e) => e.preventDefault()}
     >
-      <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <span style={labelStyle}>方法論</span>
-        <select
-          style={controlStyle}
+      <FormField label="方法論">
+        <Select
+          placeholder="選擇方法論"
           value={value.methodology_id}
           onChange={(e) => update({ methodology_id: e.target.value })}
-        >
-          <option value="" disabled>
-            選擇方法論
-          </option>
-          {methodologies.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.name}
-            </option>
-          ))}
-        </select>
-      </label>
+          options={methodologies.map((m) => ({ value: m.id, label: m.name }))}
+        />
+      </FormField>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <span style={labelStyle}>模式</span>
-        <div
-          role="group"
-          aria-label="模式"
-          style={{
-            display: "inline-flex",
-            border: "1px solid var(--tn-border)",
-            borderRadius: "var(--tn-r-pill)",
-            padding: 4,
-            gap: 4,
-            width: "fit-content",
-          }}
-        >
-          {MODE_OPTIONS.map((opt) => {
-            const active = value.mode === opt.value;
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                aria-pressed={active}
-                onClick={() => update({ mode: opt.value })}
-                style={{
-                  fontFamily: "var(--tn-font)",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  border: "none",
-                  borderRadius: "var(--tn-r-pill)",
-                  padding: "6px 16px",
-                  cursor: "pointer",
-                  background: active ? "var(--tn-primary)" : "transparent",
-                  color: active ? "var(--tn-on-primary)" : "var(--tn-text)",
-                }}
-              >
-                {opt.label}
-              </button>
-            );
-          })}
-        </div>
+        <SegmentedControl
+          ariaLabel="模式"
+          options={MODE_OPTIONS}
+          value={value.mode}
+          onChange={(next) => update({ mode: next as Mode })}
+        />
       </div>
 
-      <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <span style={labelStyle}>方向</span>
-        <input
+      <FormField label="方向">
+        <TextInput
           type="text"
-          style={controlStyle}
           value={value.direction}
           placeholder="例如：聚焦於實作細節"
           onChange={(e) => update({ direction: e.target.value })}
         />
-      </label>
+      </FormField>
 
-      <label
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-        }}
-      >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <span style={labelStyle}>查證上網</span>
-        <span
-          role="switch"
-          aria-checked={value.web_search}
-          tabIndex={0}
-          onClick={() => update({ web_search: !value.web_search })}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              update({ web_search: !value.web_search });
-            }
-          }}
-          style={{
-            width: 40,
-            height: 24,
-            borderRadius: "var(--tn-r-pill)",
-            background: value.web_search ? "var(--tn-primary)" : "var(--tn-border)",
-            position: "relative",
-            cursor: "pointer",
-            flexShrink: 0,
-            display: "inline-block",
-          }}
-        >
-          <span
-            style={{
-              position: "absolute",
-              top: 2,
-              left: value.web_search ? 18 : 2,
-              width: 20,
-              height: 20,
-              borderRadius: "var(--tn-r-pill)",
-              background: "var(--tn-on-primary)",
-              transition: "left 0.15s ease",
-            }}
-          />
-        </span>
-      </label>
+        <Toggle
+          ariaLabel="查證上網"
+          checked={value.web_search}
+          onChange={(next) => update({ web_search: next })}
+        />
+      </div>
     </form>
   );
 }

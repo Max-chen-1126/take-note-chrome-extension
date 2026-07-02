@@ -1,4 +1,6 @@
 import type { ExtractResult } from "../lib/types";
+import { Badge } from "./ui/Badge";
+import { Card } from "./ui/Card";
 
 const CATEGORY_LABELS: Record<ExtractResult["category"], string> = {
   youtube: "YouTube",
@@ -15,16 +17,7 @@ export function ExtractCard({ result }: ExtractCardProps) {
   const charCount = text.length;
 
   return (
-    <section
-      style={{
-        background: "var(--tn-surface)",
-        border: "1px solid var(--tn-border)",
-        borderRadius: "var(--tn-r-card)",
-        padding: 16,
-        fontFamily: "var(--tn-font)",
-        color: "var(--tn-text)",
-      }}
-    >
+    <Card>
       <header
         style={{
           display: "flex",
@@ -47,21 +40,10 @@ export function ExtractCard({ result }: ExtractCardProps) {
         >
           {title}
         </h2>
-        <span
-          style={{
-            flexShrink: 0,
-            fontSize: 12,
-            padding: "2px 10px",
-            borderRadius: "var(--tn-r-pill)",
-            border: "1px solid var(--tn-border)",
-            color: "var(--tn-muted)",
-          }}
-        >
-          {CATEGORY_LABELS[result.category] ?? result.category}
-        </span>
+        <Badge>{CATEGORY_LABELS[result.category] ?? result.category}</Badge>
       </header>
 
-      <p style={{ fontSize: 12, color: "var(--tn-muted)", margin: "0 0 8px" }}>
+      <p style={{ fontSize: 12, color: "var(--tn-text-muted)", margin: "0 0 8px" }}>
         {charCount} 字
       </p>
 
@@ -75,11 +57,11 @@ export function ExtractCard({ result }: ExtractCardProps) {
           border: "1px solid var(--tn-border)",
           borderRadius: "var(--tn-r-control)",
           padding: 12,
-          background: "var(--tn-bg)",
+          background: "var(--tn-surface-2)",
         }}
       >
         {text}
       </div>
-    </section>
+    </Card>
   );
 }
