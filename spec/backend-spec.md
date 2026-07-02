@@ -286,7 +286,7 @@ dev:
 - Cloud Run：min-instances 0（scale-to-zero）、request timeout 提高以容 SSE（`--timeout=3600`）、concurrency 視情況（`--concurrency=8`）。
 - service account 權限：Vertex AI User、Firestore User（無 secret，故不需 Secret Accessor）；呼叫者授權由 app 層 token 驗證 + allowlist 處理（非 Cloud Run Invoker IAM）。
 - 啟用 API：run、aiplatform、firestore、artifactregistry（0.1.0 無 secret，不需 secretmanager；不需 iap）。
-> 規劃：post-0.1.0 改 `--iap`（見 §8 規劃小節），並補 IAP 授權步驟（custom OAuth client、`roles/iap.httpsResourceAccessor`、啟用 `iap` API）。
+> IAP 已評估為結構性不可行（見 §8），維持 app 層認證；無需 `--iap` 或相關 IAP 授權步驟。
 
 ## 15. Verification（驗收）
 - `pytest` 全綠（unit + bdd）。
