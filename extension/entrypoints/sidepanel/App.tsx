@@ -160,6 +160,7 @@ export function App({ deps }: { deps: AppDeps }) {
             break;
           }
           case "error": {
+            setActiveStep(null);
             setState({ phase: "stream_error", result, error: evt.data });
             return;
           }
@@ -167,6 +168,7 @@ export function App({ deps }: { deps: AppDeps }) {
       }
     } catch (err) {
       if (runIdRef.current !== runId) return;
+      setActiveStep(null);
       setState({
         phase: "stream_error",
         result,

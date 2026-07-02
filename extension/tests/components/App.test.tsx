@@ -42,6 +42,11 @@ async function* errorMidStreamEvents(): AsyncGenerator<SseEvent> {
   yield { event: "error", data: { code: "upstream_failed", message: "上游服務錯誤" } };
 }
 
+async function* errorWhileStepActiveEvents(): AsyncGenerator<SseEvent> {
+  yield { event: "step", data: { step: "draft", status: "start", summary: null } };
+  yield { event: "error", data: { code: "upstream_failed", message: "上游服務錯誤" } };
+}
+
 function makeDeps(overrides: Partial<AppDeps> = {}): AppDeps {
   return {
     loadMethodologies: vi.fn().mockResolvedValue(methodologies),
@@ -114,6 +119,19 @@ it("shows stream_error mid-stream while preserving already-streamed content", as
   expect(await screen.findByText(/上游服務錯誤/)).toBeTruthy();
   // Already-streamed delta content remains visible.
   expect(screen.getByText("已經串到一半的內容。")).toBeTruthy();
+});
+
+it("stops the active step's pulsing animation when the stream errors mid-step", async () => {
+  const deps = makeDeps({ process: vi.fn(() => errorWhileStepActiveEvents()) });
+  render(<App deps={deps} />);
+
+  await screen.findByText("測試影片標題");
+  fireEvent.click(screen.getByRole("button", { name: /開始/ }));
+
+  await screen.findByText(/上游服務錯誤/);
+  // The "draft" step was left active (never reached "done") when the error fired;
+  // the pulsing-dot animation must not keep running underneath the error alert.
+  expect(document.querySelector(".tn-step-dot--active")).toBeNull();
 });
 
 it("retries extraction from extract_error via the retry button", async () => {
