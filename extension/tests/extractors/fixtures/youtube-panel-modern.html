@@ -1,0 +1,71 @@
+<!--
+  Synthetic fixture: a trimmed snippet shaped like YouTube's current "modern transcript
+  view" panel DOM (yt-section-list-renderer[data-target-id="PAmodern_transcript_view"] >
+  macro-markers-panel-item-view-model > timeline-item-view-model >
+  transcript-segment-view-model), used to validate parsePanelDom's modern-panel selectors.
+  Not captured from a live page; segment text is synthetic.
+-->
+<yt-section-list-renderer data-target-id="PAmodern_transcript_view">
+  <div class="ytSectionListRendererContents">
+    <div>
+      <macro-markers-panel-item-view-model tabindex="0" role="button">
+        <timeline-item-view-model class="ytwTimelineItemViewModelHost">
+          <div class="ytwTimelineItemViewModelContentItems">
+            <transcript-segment-view-model class="ytwTranscriptSegmentViewModelHost">
+              <div class="ytwTranscriptSegmentViewModelTimestamp">0:00</div>
+              <span class="ytAttributedStringHost" role="text">Hey everyone, welcome back to the channel.</span>
+            </transcript-segment-view-model>
+          </div>
+        </timeline-item-view-model>
+      </macro-markers-panel-item-view-model>
+    </div>
+    <div>
+      <macro-markers-panel-item-view-model tabindex="0" role="button">
+        <timeline-item-view-model class="ytwTimelineItemViewModelHost">
+          <div class="ytwTimelineItemViewModelContentItems">
+            <transcript-segment-view-model class="ytwTranscriptSegmentViewModelHost">
+              <div class="ytwTranscriptSegmentViewModelTimestamp">0:04</div>
+              <span class="ytAttributedStringHost" role="text">Today we're going to walk through how transcript extraction works for this extension.</span>
+            </transcript-segment-view-model>
+          </div>
+        </timeline-item-view-model>
+      </macro-markers-panel-item-view-model>
+    </div>
+    <div>
+      <macro-markers-panel-item-view-model tabindex="0" role="button">
+        <timeline-item-view-model class="ytwTimelineItemViewModelHost">
+          <div class="ytwTimelineItemViewModelContentItems">
+            <transcript-segment-view-model class="ytwTranscriptSegmentViewModelHost">
+              <div class="ytwTranscriptSegmentViewModelTimestamp">0:08</div>
+              <span class="ytAttributedStringHost" role="text">When the json3 endpoint is blocked, the content script falls back to reading this panel instead.</span>
+            </transcript-segment-view-model>
+          </div>
+        </timeline-item-view-model>
+      </macro-markers-panel-item-view-model>
+    </div>
+    <div>
+      <macro-markers-panel-item-view-model tabindex="0" role="button">
+        <timeline-item-view-model class="ytwTimelineItemViewModelHost">
+          <div class="ytwTimelineItemViewModelContentItems">
+            <transcript-segment-view-model class="ytwTranscriptSegmentViewModelHost">
+              <div class="ytwTranscriptSegmentViewModelTimestamp">0:13</div>
+              <span class="ytAttributedStringHost" role="text">Each segment renders inside its own transcript-segment-view-model element now.</span>
+            </transcript-segment-view-model>
+          </div>
+        </timeline-item-view-model>
+      </macro-markers-panel-item-view-model>
+    </div>
+    <div>
+      <macro-markers-panel-item-view-model tabindex="0" role="button">
+        <timeline-item-view-model class="ytwTimelineItemViewModelHost">
+          <div class="ytwTimelineItemViewModelContentItems">
+            <transcript-segment-view-model class="ytwTranscriptSegmentViewModelHost">
+              <div class="ytwTranscriptSegmentViewModelTimestamp">0:18</div>
+              <span class="ytAttributedStringHost" role="text">Thanks for watching, and see you in the next one.</span>
+            </transcript-segment-view-model>
+          </div>
+        </timeline-item-view-model>
+      </macro-markers-panel-item-view-model>
+    </div>
+  </div>
+</yt-section-list-renderer>

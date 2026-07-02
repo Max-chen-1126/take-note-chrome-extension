@@ -14,6 +14,14 @@ export function parseJson3(json: any): string {
     .trim();
 }
 export function parsePanelDom(doc: Document): string {
-  const segs = Array.from(doc.querySelectorAll(".segment-text"));
-  return segs.map(n => (n.textContent ?? "").trim()).filter(Boolean).join(" ").trim();
+  const modern = Array.from(doc.querySelectorAll("transcript-segment-view-model"));
+  if (modern.length > 0) {
+    return modern
+      .map((seg) => (seg.querySelector('span[role="text"]')?.textContent ?? "").trim())
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+  }
+  const legacy = Array.from(doc.querySelectorAll(".segment-text"));
+  return legacy.map((n) => (n.textContent ?? "").trim()).filter(Boolean).join(" ").trim();
 }
