@@ -1,15 +1,113 @@
 :root {
-  --tn-bg: #FFFFFF;
-  --tn-surface: #FAFAFA;
-  --tn-border: #E5E5E5;
-  --tn-text: #0A0A0A;
-  --tn-muted: #737373;
-  --tn-primary: #0A0A0A;
-  --tn-on-primary: #FFFFFF;
-  --tn-r-card: 16px;
-  --tn-r-control: 10px;
-  --tn-r-pill: 9999px;
+  /* Primitive scale — internal to this file, never referenced directly by
+     components. Semantic tokens below are the public API. */
+  --tn-gray-0: #FFFFFF;
+  --tn-gray-50: #FAFAFA;
+  --tn-gray-100: #F5F5F5;
+  --tn-gray-200: #E5E5E5;
+  --tn-gray-300: #D4D4D4;
+  --tn-gray-400: #A3A3A3;
+  --tn-gray-500: #737373;
+  --tn-gray-950: #0A0A0A;
+
+  --tn-accent-50: #EEF2FF;
+  --tn-accent-400: #818CF8;
+  --tn-accent-600: #4F46E5;
+  --tn-accent-700: #4338CA;
+  --tn-accent-800: #3730A3;
+
+  --tn-red-400: #F87171;
+  --tn-red-600: #DC2626;
+
+  /* Semantic tokens — light (default) */
+  --tn-bg: var(--tn-gray-0);
+  --tn-surface: var(--tn-gray-50);
+  --tn-surface-2: var(--tn-gray-100);
+  --tn-border: var(--tn-gray-200);
+  --tn-border-strong: var(--tn-gray-300);
+  --tn-text: var(--tn-gray-950);
+  --tn-text-muted: var(--tn-gray-500);
+  --tn-text-disabled: var(--tn-gray-400);
+
+  --tn-accent: var(--tn-accent-600);
+  --tn-accent-hover: var(--tn-accent-700);
+  --tn-accent-active: var(--tn-accent-800);
+  --tn-accent-subtle: var(--tn-accent-50);
+  --tn-on-accent: var(--tn-gray-0);
+
+  --tn-danger: var(--tn-red-600);
+  --tn-danger-subtle: #FEF2F2;
+  --tn-on-danger: var(--tn-gray-0);
+
+  --tn-focus-ring: var(--tn-accent-600);
+
+  /* Permanent neutral ink pair — used by SegmentedControl's selected state.
+     Not deprecated; do not remove. */
+  --tn-primary: var(--tn-gray-950);
+  --tn-on-primary: var(--tn-gray-0);
+
+  /* Deprecated alias — kept ONLY during the design-system migration (Task 2
+     through Task 11), removed in Task 12's cleanup once no component
+     references it directly anymore. Use --tn-text-muted in new code. */
+  --tn-muted: var(--tn-text-muted);
+
+  /* Typography scale (consumed directly in real CSS, e.g. .tn-markdown-view
+     rules below — NOT inside inline style={} objects, see plan's Global
+     Constraints). */
   --tn-font: system-ui, -apple-system, "Noto Sans TC", sans-serif;
+  --tn-font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+
+  --tn-text-lg: 16px;
+  --tn-text-lg-leading: 24px;
+  --tn-text-xl: 20px;
+  --tn-text-xl-leading: 28px;
+
+  --tn-weight-semibold: 600;
+
+  /* Spacing (4px grid, consumed directly in real CSS). */
+  --tn-space-1: 4px;
+  --tn-space-2: 8px;
+  --tn-space-3: 12px;
+  --tn-space-4: 16px;
+  --tn-space-5: 20px;
+
+  /* Radius — unchanged, already covers every use case. */
+  --tn-r-control: 10px;
+  --tn-r-card: 16px;
+  --tn-r-pill: 9999px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --tn-bg: #0A0A0A;
+    --tn-surface: #161616;
+    --tn-surface-2: #1F1F1F;
+    --tn-border: #2A2A2A;
+    --tn-border-strong: #3D3D3D;
+    --tn-text: #FAFAFA;
+    --tn-text-muted: #A1A1A1;
+    --tn-text-disabled: #6B6B6B;
+
+    --tn-accent: var(--tn-accent-400);
+    --tn-accent-hover: #A5B4FC;
+    --tn-accent-active: #C7D2FE;
+    --tn-accent-subtle: rgba(129, 140, 248, 0.16);
+    --tn-on-accent: var(--tn-gray-950);
+
+    --tn-danger: var(--tn-red-400);
+    --tn-danger-subtle: rgba(248, 113, 113, 0.14);
+    --tn-on-danger: var(--tn-gray-950);
+
+    --tn-focus-ring: var(--tn-accent-400);
+
+    --tn-primary: #FAFAFA;
+    --tn-on-primary: var(--tn-gray-950);
+
+    /* --tn-muted intentionally NOT redeclared here: its value is the raw
+       token `var(--tn-text-muted)`, which is re-evaluated at point of use
+       against whatever --tn-text-muted currently resolves to (this dark
+       block's value) — no separate override needed. */
+  }
 }
 
 .tn-app {
@@ -17,4 +115,33 @@
   color: var(--tn-text);
   background: var(--tn-bg);
   padding: 16px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--tn-focus-ring);
+  outline-offset: 2px;
+}
+
+.tn-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes tn-spin {
+  to { transform: rotate(360deg); }
+}
+.tn-spin {
+  animation: tn-spin 0.8s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tn-spin { animation: none; }
+  * { transition-duration: 0.01ms !important; }
 }
