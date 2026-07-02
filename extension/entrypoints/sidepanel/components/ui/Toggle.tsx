@@ -24,6 +24,7 @@ export function Toggle({ checked, onChange, ariaLabel, id }: ToggleProps) {
         cursor: "pointer",
         flexShrink: 0,
         padding: 0,
+        transition: "background-color 0.15s ease",
       }}
     >
       {/* Knob is deliberately always --tn-gray-0 (pure white) regardless of
