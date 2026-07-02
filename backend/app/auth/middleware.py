@@ -28,7 +28,7 @@ def verify_request(request: Request) -> str:
         # google.oauth2.id_token.verify_oauth2_token 對無效/過期/格式錯誤的
         # token 一律拋 ValueError；其他例外（例如網路或憑證取得失敗）不應
         # 冒充成「無效 token」的 401，讓它往外傳並變成 500。
-        logger.warning("ID token verification failed: %s", exc)
+        logger.warning("ID token verification failed: %s", type(exc).__name__)
         log_event(logger, logging.WARNING, "auth_denied",
                   status_code=401, reason="invalid_token")
         raise HTTPException(status_code=401, detail="invalid token")

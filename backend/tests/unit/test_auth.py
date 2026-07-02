@@ -83,3 +83,21 @@ def test_denied_403_logs_auth_denied_event(monkeypatch, caplog):
     events = [r for r in caplog.records if getattr(r, "fields", None)]
     assert any(r.fields.get("status_code") == 403 and r.fields.get("email") == "bad@x.com"
               for r in events)
+
+
+def test_invalid_token_error_does_not_leak_raw_exception_text(monkeypatch, caplog):
+    # 確保 ValueError 的原始例外文字（可能內嵌 token 片段，例如
+    # "Wrong number of segments in token: <token>"）不會被寫進結構化 log。
+    fake_token_fragment = "some.fake.jwt.fragment.that.looks.like.a.token"
+    monkeypatch.setattr(
+        mw.id_token, "verify_oauth2_token",
+        lambda *a, **k: (_ for _ in ()).throw(
+            ValueError(f"Wrong number of segments in token: {fake_token_fragment}")
+        ),
+    )
+    with caplog.at_level(logging.WARNING, logger="app.auth"):
+        with pytest.raises(HTTPException):
+            mw.verify_request(_req({"Authorization": "Bearer t"}))
+    assert any(r.levelno == logging.WARNING for r in caplog.records)
+    for record in caplog.records:
+        assert fake_token_fragment not in record.getMessage()
