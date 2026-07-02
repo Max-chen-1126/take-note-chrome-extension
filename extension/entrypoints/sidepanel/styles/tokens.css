@@ -301,3 +301,17 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .tn-stream-caret { animation: none; opacity: 0.6; }
 }
+
+@keyframes tn-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.tn-skeleton {
+  border-radius: var(--tn-r-control);
+  background: linear-gradient(90deg, var(--tn-surface-2) 25%, var(--tn-border) 50%, var(--tn-surface-2) 75%);
+  background-size: 200% 100%;
+  animation: tn-shimmer 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tn-skeleton { animation: none; }
+}

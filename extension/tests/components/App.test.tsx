@@ -1,4 +1,5 @@
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { act } from "react";
 import { App, type AppDeps } from "../../entrypoints/sidepanel/App";
 import type { ExtractResult, SseEvent } from "../../entrypoints/sidepanel/lib/types";
 
@@ -151,4 +152,24 @@ it("retries the stream from stream_error via the retry button", async () => {
     expect(screen.getByText("這是內容第一段。")).toBeTruthy();
   });
   expect(process).toHaveBeenCalledTimes(2);
+});
+
+it("shows the skeleton only after extraction has been pending for 500ms", async () => {
+  vi.useFakeTimers();
+  let resolveExtract: (r: ExtractResult) => void = () => {};
+  const extract = vi.fn(
+    () => new Promise<ExtractResult>((resolve) => { resolveExtract = resolve; })
+  );
+  const deps = makeDeps({ extract });
+  render(<App deps={deps} />);
+
+  act(() => { vi.advanceTimersByTime(499); });
+  expect(document.querySelector(".tn-skeleton")).toBeNull();
+
+  act(() => { vi.advanceTimersByTime(1); });
+  expect(document.querySelector(".tn-skeleton")).not.toBeNull();
+
+  act(() => { resolveExtract(extractResult); });
+  vi.useRealTimers();
+  await screen.findByText("測試影片標題");
 });

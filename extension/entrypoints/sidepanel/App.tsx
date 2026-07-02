@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, Sparkles } from "lucide-react";
 import { ExtractCard } from "./components/ExtractCard";
+import { ExtractCardSkeleton } from "./components/ExtractCardSkeleton";
 import { SettingsForm, type SettingsFormValue } from "./components/SettingsForm";
 import { StepProgress } from "./components/StepProgress";
 import { MarkdownView } from "./components/MarkdownView";
@@ -61,6 +62,17 @@ export function App({ deps }: { deps: AppDeps }) {
   // Guards against a stale async run (e.g. a second 開始 click) clobbering
   // state from a still-in-flight previous stream.
   const runIdRef = useRef(0);
+
+  const [showSkeleton, setShowSkeleton] = useState(false);
+
+  useEffect(() => {
+    if (state.phase !== "extracting") {
+      setShowSkeleton(false);
+      return;
+    }
+    const timer = setTimeout(() => setShowSkeleton(true), 500);
+    return () => clearTimeout(timer);
+  }, [state.phase]);
 
   function runExtract() {
     setState({ phase: "extracting" });
@@ -172,20 +184,25 @@ export function App({ deps }: { deps: AppDeps }) {
   if (state.phase === "extracting") {
     return (
       <div className="tn-app" style={pageStyle}>
-        <div
-          role="status"
-          aria-live="polite"
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 8,
-            minHeight: 200,
-          }}
-        >
-          <Spinner size={24} />
-          <p style={{ margin: 0, fontSize: 14, color: "var(--tn-text-muted)" }}>擷取中…</p>
+        <div role="status" aria-live="polite">
+          <span className="tn-visually-hidden">擷取中…</span>
+          {showSkeleton ? (
+            <ExtractCardSkeleton />
+          ) : (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+                minHeight: 200,
+              }}
+            >
+              <Spinner size={24} />
+              <p style={{ margin: 0, fontSize: 14, color: "var(--tn-text-muted)" }}>擷取中…</p>
+            </div>
+          )}
         </div>
       </div>
     );
