@@ -27,3 +27,25 @@ def test_log_event_attaches_fields_to_record(caplog):
     with caplog.at_level(logging.INFO, logger="test.logging.event"):
         log_event(logger, logging.INFO, "auth_denied", status_code=401)
     assert any(getattr(r, "fields", None) == {"status_code": 401} for r in caplog.records)
+
+
+def test_json_formatter_does_not_crash_on_non_serializable_field():
+    class Unserializable:
+        def __str__(self):
+            return "Unserializable(custom)"
+
+    logger = logging.getLogger("test.logging.unserializable")
+    record = logger.makeRecord(
+        "test.logging.unserializable", logging.ERROR, __file__, 0, "pipeline_error", (), None,
+    )
+    record.fields = {
+        "error": ValueError("boom"),
+        "seen": {1, 2, 3},
+        "obj": Unserializable(),
+    }
+    line = _JsonFormatter().format(record)
+    data = json.loads(line)
+    assert data["error"] == "boom"
+    assert data["obj"] == "Unserializable(custom)"
+    assert isinstance(data["seen"], str)
+    assert data["seen"] == str({1, 2, 3})

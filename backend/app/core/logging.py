@@ -26,7 +26,7 @@ class _JsonFormatter(logging.Formatter):
             "request_id": request_id_var.get(),
         }
         payload.update(getattr(record, "fields", None) or {})
-        return json.dumps(payload, ensure_ascii=False)
+        return json.dumps(payload, ensure_ascii=False, default=str)
 
 
 def configure_logging() -> None:
