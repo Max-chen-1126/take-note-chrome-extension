@@ -234,7 +234,7 @@ export function App({ deps }: { deps: AppDeps }) {
         <ErrorState title="串流發生錯誤" message={state.error.message} onRetry={handleStart} />
       )}
 
-      <MarkdownView markdown={markdownToShow} />
+      <MarkdownView markdown={markdownToShow} streaming={state.phase === "streaming"} />
     </div>
   );
 }

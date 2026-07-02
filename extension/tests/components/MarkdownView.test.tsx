@@ -22,3 +22,15 @@ it("sanitizes dangerous HTML from (untrusted-derived) notes", () => {
   // legitimate content still renders
   expect(container.querySelector("h1")?.textContent).toBe("Title");
 });
+
+it("appends a blinking caret span when streaming is true", () => {
+  const { container } = render(<MarkdownView markdown="Hello" streaming />);
+  const caret = container.querySelector(".tn-stream-caret");
+  expect(caret).toBeTruthy();
+  expect(caret?.textContent).toBe("▍");
+});
+
+it("does not render the caret when streaming is false or omitted", () => {
+  const { container } = render(<MarkdownView markdown="Hello" />);
+  expect(container.querySelector(".tn-stream-caret")).toBeNull();
+});

@@ -287,3 +287,17 @@ body {
   .tn-step-dot--active { animation: none; }
   .tn-step-check { animation: none; }
 }
+
+@keyframes tn-caret-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.tn-stream-caret {
+  display: inline-block;
+  margin-left: 2px;
+  color: var(--tn-accent);
+  animation: tn-caret-blink 1s step-end infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tn-stream-caret { animation: none; opacity: 0.6; }
+}
