@@ -34,5 +34,5 @@ it("shows the active step's description text", () => {
 it("shows a non-breaking-space placeholder when no step is active", () => {
   render(<StepProgress active={null} doneSteps={[]} />);
   const status = screen.getByRole("status");
-  expect(status.textContent).toBe(" ");
+  expect(status.textContent).toBe(" ");
 });

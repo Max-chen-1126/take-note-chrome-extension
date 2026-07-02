@@ -74,7 +74,7 @@ export function StepProgress({ active, doneSteps }: StepProgressProps) {
         aria-live="polite"
         style={{ margin: "8px 0 0", fontSize: 12, color: "var(--tn-text-muted)", fontFamily: "var(--tn-font)" }}
       >
-        {active ? STEP_DESCRIPTIONS[active] : " "}
+        {active ? STEP_DESCRIPTIONS[active] : " "}
       </p>
     </div>
   );
