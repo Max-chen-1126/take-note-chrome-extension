@@ -25,3 +25,14 @@ it("renders a checkmark icon for done steps and a pulsing dot for the active ste
   expect(activeItem.querySelector(".tn-step-dot--active")).toBeTruthy();
   expect(activeItem.querySelector("svg")).toBeNull();
 });
+
+it("shows the active step's description text", () => {
+  render(<StepProgress active="verify" doneSteps={["structure", "draft"]} />);
+  expect(screen.getByText("正在對照原始內容查核論述依據…")).toBeTruthy();
+});
+
+it("shows a non-breaking-space placeholder when no step is active", () => {
+  render(<StepProgress active={null} doneSteps={[]} />);
+  const status = screen.getByRole("status");
+  expect(status.textContent).toBe(" ");
+});
