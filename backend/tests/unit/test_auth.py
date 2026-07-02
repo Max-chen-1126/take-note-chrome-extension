@@ -1,3 +1,5 @@
+import logging
+
 import pytest
 from fastapi import HTTPException
 from starlette.requests import Request
@@ -68,3 +70,16 @@ def test_non_value_error_propagates(monkeypatch):
     )
     with pytest.raises(RuntimeError):
         mw.verify_request(_req({"Authorization": "Bearer t"}))
+
+
+def test_denied_403_logs_auth_denied_event(monkeypatch, caplog):
+    monkeypatch.setenv("ALLOWED_EMAILS", "ok@x.com")
+    cfg.get_settings.cache_clear()
+    monkeypatch.setattr(mw.id_token, "verify_oauth2_token",
+                        lambda *a, **k: {"email": "bad@x.com"})
+    with caplog.at_level(logging.WARNING, logger="app.auth"):
+        with pytest.raises(HTTPException):
+            mw.verify_request(_req({"Authorization": "Bearer t"}))
+    events = [r for r in caplog.records if getattr(r, "fields", None)]
+    assert any(r.fields.get("status_code") == 403 and r.fields.get("email") == "bad@x.com"
+              for r in events)
