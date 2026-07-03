@@ -1,4 +1,5 @@
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { act } from "react";
 import { App, type AppDeps } from "../../entrypoints/sidepanel/App";
 import type { ExtractResult, SseEvent } from "../../entrypoints/sidepanel/lib/types";
 
@@ -38,6 +39,11 @@ async function* errorMidStreamEvents(): AsyncGenerator<SseEvent> {
   yield { event: "step", data: { step: "structure", status: "start", summary: null } };
   yield { event: "step", data: { step: "structure", status: "done", summary: null } };
   yield { event: "delta", data: { text: "已經串到一半的內容。" } };
+  yield { event: "error", data: { code: "upstream_failed", message: "上游服務錯誤" } };
+}
+
+async function* errorWhileStepActiveEvents(): AsyncGenerator<SseEvent> {
+  yield { event: "step", data: { step: "draft", status: "start", summary: null } };
   yield { event: "error", data: { code: "upstream_failed", message: "上游服務錯誤" } };
 }
 
@@ -113,4 +119,75 @@ it("shows stream_error mid-stream while preserving already-streamed content", as
   expect(await screen.findByText(/上游服務錯誤/)).toBeTruthy();
   // Already-streamed delta content remains visible.
   expect(screen.getByText("已經串到一半的內容。")).toBeTruthy();
+});
+
+it("stops the active step's pulsing animation when the stream errors mid-step", async () => {
+  const deps = makeDeps({ process: vi.fn(() => errorWhileStepActiveEvents()) });
+  render(<App deps={deps} />);
+
+  await screen.findByText("測試影片標題");
+  fireEvent.click(screen.getByRole("button", { name: /開始/ }));
+
+  await screen.findByText(/上游服務錯誤/);
+  // The "draft" step was left active (never reached "done") when the error fired;
+  // the pulsing-dot animation must not keep running underneath the error alert.
+  expect(document.querySelector(".tn-step-dot--active")).toBeNull();
+});
+
+it("retries extraction from extract_error via the retry button", async () => {
+  const failResult = {
+    ok: false,
+    category: "article" as const,
+    content: { title: "", url: "https://example.com", text: "", metadata: null },
+    error: { code: "extract_failed", message: "無法讀取字幕，請開啟字幕面板後重試。" },
+  };
+  const extract = vi.fn().mockResolvedValueOnce(failResult).mockResolvedValueOnce(extractResult);
+  const deps = makeDeps({ extract });
+  render(<App deps={deps} />);
+
+  expect(await screen.findByText(/無法讀取字幕/)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: /重試/ }));
+
+  expect(await screen.findByText("測試影片標題")).toBeTruthy();
+  expect(extract).toHaveBeenCalledTimes(2);
+});
+
+it("retries the stream from stream_error via the retry button", async () => {
+  const process = vi
+    .fn()
+    .mockImplementationOnce(() => errorMidStreamEvents())
+    .mockImplementationOnce(() => happyPathEvents());
+  const deps = makeDeps({ process });
+  render(<App deps={deps} />);
+
+  await screen.findByText("測試影片標題");
+  fireEvent.click(screen.getByRole("button", { name: /開始/ }));
+
+  expect(await screen.findByText(/上游服務錯誤/)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: /重試/ }));
+
+  await waitFor(() => {
+    expect(screen.getByText("這是內容第一段。")).toBeTruthy();
+  });
+  expect(process).toHaveBeenCalledTimes(2);
+});
+
+it("shows the skeleton only after extraction has been pending for 500ms", async () => {
+  vi.useFakeTimers();
+  let resolveExtract: (r: ExtractResult) => void = () => {};
+  const extract = vi.fn(
+    () => new Promise<ExtractResult>((resolve) => { resolveExtract = resolve; })
+  );
+  const deps = makeDeps({ extract });
+  render(<App deps={deps} />);
+
+  act(() => { vi.advanceTimersByTime(499); });
+  expect(document.querySelector(".tn-skeleton")).toBeNull();
+
+  act(() => { vi.advanceTimersByTime(1); });
+  expect(document.querySelector(".tn-skeleton")).not.toBeNull();
+
+  act(() => { resolveExtract(extractResult); });
+  vi.useRealTimers();
+  await screen.findByText("測試影片標題");
 });

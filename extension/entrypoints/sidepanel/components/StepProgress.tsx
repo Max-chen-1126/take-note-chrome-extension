@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
+import { Check } from "lucide-react";
 import type { StepName } from "../lib/types";
-import { STEP_LABELS } from "../lib/types";
+import { STEP_LABELS, STEP_DESCRIPTIONS } from "../lib/types";
 
 const STEP_ORDER: StepName[] = ["structure", "draft", "augment", "verify", "format"];
 
@@ -21,43 +22,60 @@ const dotStyle = (state: StepState): CSSProperties => ({
   width: 8,
   height: 8,
   borderRadius: "var(--tn-r-pill)",
-  background: state === "pending" ? "var(--tn-border)" : "var(--tn-primary)",
-  opacity: state === "active" ? 1 : state === "done" ? 0.6 : 1,
+  background: state === "pending" ? "var(--tn-border)" : "var(--tn-accent)",
 });
 
 export function StepProgress({ active, doneSteps }: StepProgressProps) {
   return (
-    <ol
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 12,
-        listStyle: "none",
-        margin: 0,
-        padding: 0,
-        fontFamily: "var(--tn-font)",
-      }}
-    >
-      {STEP_ORDER.map((step) => {
-        const state = stateFor(step, active, doneSteps);
-        return (
-          <li
-            key={step}
-            data-state={state}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              color: state === "pending" ? "var(--tn-muted)" : "var(--tn-text)",
-              fontWeight: state === "active" ? 600 : 400,
-              fontSize: 12,
-            }}
-          >
-            <span aria-hidden="true" style={dotStyle(state)} />
-            <span>{STEP_LABELS[step]}</span>
-          </li>
-        );
-      })}
-    </ol>
+    <div>
+      <ol
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          listStyle: "none",
+          margin: 0,
+          padding: 0,
+          fontFamily: "var(--tn-font)",
+        }}
+      >
+        {STEP_ORDER.map((step) => {
+          const state = stateFor(step, active, doneSteps);
+          return (
+            <li
+              key={step}
+              data-state={state}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                color: state === "pending" ? "var(--tn-text-muted)" : "var(--tn-text)",
+                fontWeight: state === "active" ? 600 : 400,
+                fontSize: 12,
+              }}
+            >
+              <span className="tn-step-marker" aria-hidden="true">
+                {state === "done" ? (
+                  <Check size={10} strokeWidth={3} className="tn-step-check" style={{ color: "var(--tn-accent)" }} />
+                ) : (
+                  <span
+                    className={state === "active" ? "tn-step-dot--active" : undefined}
+                    style={dotStyle(state)}
+                  />
+                )}
+              </span>
+              <span>{STEP_LABELS[step]}</span>
+            </li>
+          );
+        })}
+      </ol>
+      <p
+        role="status"
+        aria-live="polite"
+        style={{ margin: "8px 0 0", fontSize: 12, color: "var(--tn-text-muted)", fontFamily: "var(--tn-font)" }}
+      >
+        {active ? STEP_DESCRIPTIONS[active] : " "}
+      </p>
+    </div>
   );
 }

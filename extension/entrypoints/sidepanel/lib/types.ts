@@ -15,6 +15,14 @@ export type StepName = "structure"|"draft"|"augment"|"verify"|"format";
 export const STEP_LABELS:Record<StepName,string> =
   { structure:"整理", draft:"草稿", augment:"補充", verify:"查證", format:"成稿" };
 
+export const STEP_DESCRIPTIONS: Record<StepName, string> = {
+  structure: "正在整理內容重點與段落結構…",
+  draft: "正在依整理結果撰寫筆記草稿…",
+  augment: "正在補充洞見與延伸連結…",
+  verify: "正在對照原始內容查核論述依據…",
+  format: "正在整理為最終 Markdown 筆記…",
+};
+
 export type SseEvent =
   | { event:"step"; data:{ step:StepName; status:"start"|"done"; summary:string|null } }
   | { event:"delta"; data:{ text:string } }

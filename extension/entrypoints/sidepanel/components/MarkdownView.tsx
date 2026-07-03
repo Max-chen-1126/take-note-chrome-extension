@@ -3,14 +3,21 @@ import DOMPurify from "dompurify";
 
 export interface MarkdownViewProps {
   markdown: string;
+  streaming?: boolean;
 }
 
-export function MarkdownView({ markdown }: MarkdownViewProps) {
+export function MarkdownView({ markdown, streaming = false }: MarkdownViewProps) {
   // The notes are produced by an LLM from UNTRUSTED scraped page content
   // (YouTube transcripts, arbitrary articles), and this runs in the extension's
   // privileged context (storage/identity). Sanitize the rendered HTML so any
   // injected <script>/onerror=/javascript: payload can't execute here.
-  const html = DOMPurify.sanitize(marked.parse(markdown, { async: false }) as string);
+  //
+  // The streaming caret is appended to the local parse source only — it never
+  // touches the `markdown` prop itself, so CopyButton's copied text (which
+  // reads from App's own streamedMarkdown/finalMarkdown state, not from this
+  // component) is unaffected.
+  const source = streaming ? `${markdown}<span class="tn-stream-caret">▍</span>` : markdown;
+  const html = DOMPurify.sanitize(marked.parse(source, { async: false }) as string);
 
   return (
     <div

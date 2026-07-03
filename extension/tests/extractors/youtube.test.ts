@@ -46,3 +46,28 @@ it("parses transcript panel DOM as fallback", () => {
   const expected = `${segment1} ${segment2} ${segment3} ${segment4} ${segment5}`;
   expect(result).toBe(expected);
 });
+it("parses the modern transcript panel DOM", () => {
+  const doc = new JSDOM(readFileSync("tests/extractors/fixtures/youtube-panel-modern.html", "utf8")).window.document;
+  const result = parsePanelDom(doc);
+
+  const segment1 = "Hey everyone, welcome back to the channel.";
+  const segment2 = "Today we're going to walk through how transcript extraction works for this extension.";
+  const segment3 = "When the json3 endpoint is blocked, the content script falls back to reading this panel instead.";
+  const segment4 = "Each segment renders inside its own transcript-segment-view-model element now.";
+  const segment5 = "Thanks for watching, and see you in the next one.";
+
+  expect(result).toContain(segment1);
+  expect(result).toContain(segment2);
+  expect(result).toContain(segment3);
+  expect(result).toContain(segment4);
+  expect(result).toContain(segment5);
+
+  expect(result).not.toContain("0:00");
+  expect(result).not.toContain("0:04");
+  expect(result).not.toContain("0:08");
+  expect(result).not.toContain("0:13");
+  expect(result).not.toContain("0:18");
+
+  const expected = `${segment1} ${segment2} ${segment3} ${segment4} ${segment5}`;
+  expect(result).toBe(expected);
+});
