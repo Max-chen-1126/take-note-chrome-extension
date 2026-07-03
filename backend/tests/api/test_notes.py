@@ -190,3 +190,175 @@ async def test_pipeline_error_event_on_provider_exception(monkeypatch, caplog):
                      and r.fields.get("code") == "provider_error"]
     assert len(error_records) == 1
     assert error_records[0].fields["error_message"] == "boom mid-stream"
+
+
+def _all_steps_methodology():
+    return {"categories": ["youtube"],
+            "steps": {s: {"enabled": True, "instruction": {"concise": s}}
+                      for s in ["structure", "draft", "augment", "verify", "format"]}}
+
+
+@pytest.mark.asyncio
+async def test_block_tier_refuses_before_any_llm_call(monkeypatch):
+    calls = {"n": 0}
+
+    async def fake_drive_adk(*a, **k):
+        calls["n"] += 1
+        return
+        yield  # pragma: no cover - unreachable, keeps this an async generator
+
+    monkeypatch.setattr(notes, "_drive_adk", fake_drive_adk)
+    monkeypatch.setattr(notes, "check_budget_tier",
+                        lambda _settings: (notes.BudgetTier.BLOCK, False))
+    body = "".join([c async for c in notes.run_pipeline(
+        _req(), _all_steps_methodology(), notes.get_settings())])
+    assert "budget_exceeded" in body
+    assert "event: error" in body
+    assert calls["n"] == 0  # zero tokens spent — never reached the LLM call
+
+
+@pytest.mark.asyncio
+async def test_degrade_tier_forces_web_search_off(monkeypatch):
+    monkeypatch.setattr(notes, "check_budget_tier",
+                        lambda _settings: (notes.BudgetTier.DEGRADE_WEB_SEARCH, False))
+    captured = {}
+    real_build = notes.build_pipeline
+
+    def fake_build(methodology, mode, provider, model, web_search, system):
+        captured["web_search"] = web_search
+        return real_build(methodology, mode, provider, model, web_search, system)
+
+    monkeypatch.setattr(notes, "build_pipeline", fake_build)
+
+    async def fake_drive_adk(agent, initial_state):
+        from types import SimpleNamespace as N
+        yield N(author="step_format", partial=False, content=N(parts=[N(text="# ok")]),
+                grounding_metadata=None, is_final_response=lambda: True, usage_metadata=None)
+
+    monkeypatch.setattr(notes, "_drive_adk", fake_drive_adk)
+    req = NoteRequest(category="youtube", methodology_id="m1", mode="concise",
+                       web_search=True, content={"text": "x" * 300})
+    body = "".join([c async for c in notes.run_pipeline(
+        req, _all_steps_methodology(), notes.get_settings())])
+    assert "event: done" in body
+    assert captured["web_search"] is False  # forced off despite req.web_search=True
+
+
+@pytest.mark.asyncio
+async def test_normal_tier_leaves_web_search_untouched(monkeypatch):
+    monkeypatch.setattr(notes, "check_budget_tier",
+                        lambda _settings: (notes.BudgetTier.NORMAL, False))
+    captured = {}
+    real_build = notes.build_pipeline
+
+    def fake_build(methodology, mode, provider, model, web_search, system):
+        captured["web_search"] = web_search
+        return real_build(methodology, mode, provider, model, web_search, system)
+
+    monkeypatch.setattr(notes, "build_pipeline", fake_build)
+
+    async def fake_drive_adk(agent, initial_state):
+        from types import SimpleNamespace as N
+        yield N(author="step_format", partial=False, content=N(parts=[N(text="# ok")]),
+                grounding_metadata=None, is_final_response=lambda: True, usage_metadata=None)
+
+    monkeypatch.setattr(notes, "_drive_adk", fake_drive_adk)
+    req = NoteRequest(category="youtube", methodology_id="m1", mode="concise",
+                       web_search=True, content={"text": "x" * 300})
+    body = "".join([c async for c in notes.run_pipeline(
+        req, _all_steps_methodology(), notes.get_settings())])
+    assert "event: done" in body
+    assert captured["web_search"] is True  # untouched under NORMAL tier
+
+
+@pytest.mark.asyncio
+async def test_pipeline_done_logs_usage_and_records_cost(monkeypatch, caplog):
+    monkeypatch.setattr(notes, "check_budget_tier",
+                        lambda _settings: (notes.BudgetTier.NORMAL, False))
+    recorded = {}
+
+    def fake_record_usage(month_key, *, cost_usd, prompt_tokens, output_tokens,
+                          request_count_delta=1):
+        recorded["month_key"] = month_key
+        recorded["cost_usd"] = cost_usd
+        recorded["prompt_tokens"] = prompt_tokens
+        recorded["output_tokens"] = output_tokens
+
+    monkeypatch.setattr(notes, "record_usage", fake_record_usage)
+    monkeypatch.setattr(notes, "estimate_cost_usd", lambda model_id, p, o: 0.0042)
+
+    from types import SimpleNamespace as N
+    usage = N(prompt_token_count=120, candidates_token_count=340)
+
+    async def fake_drive_adk(agent, initial_state):
+        yield N(author="step_format", partial=False, content=N(parts=[N(text="# ok")]),
+                grounding_metadata=None, is_final_response=lambda: True, usage_metadata=usage)
+
+    monkeypatch.setattr(notes, "_drive_adk", fake_drive_adk)
+    with caplog.at_level(logging.INFO, logger="app.notes"):
+        body = "".join([c async for c in notes.run_pipeline(
+            _req(), _all_steps_methodology(), notes.get_settings())])
+    assert "event: done" in body
+    assert recorded["cost_usd"] == 0.0042
+    assert recorded["prompt_tokens"] == 120
+    assert recorded["output_tokens"] == 340
+    done_records = [r for r in caplog.records
+                    if getattr(r, "fields", None) and r.getMessage() == "pipeline_done"]
+    assert len(done_records) == 1
+    assert done_records[0].fields["prompt_tokens"] == 120
+    assert done_records[0].fields["output_tokens"] == 340
+    assert done_records[0].fields["estimated_cost_usd"] == 0.0042
+    assert done_records[0].fields["web_search_used"] is False
+
+
+@pytest.mark.asyncio
+async def test_record_usage_failure_does_not_surface_as_client_error(monkeypatch, caplog):
+    monkeypatch.setattr(notes, "check_budget_tier",
+                        lambda _settings: (notes.BudgetTier.NORMAL, False))
+
+    def fake_record_usage(*a, **k):
+        raise RuntimeError("firestore write failed")
+
+    monkeypatch.setattr(notes, "record_usage", fake_record_usage)
+
+    from types import SimpleNamespace as N
+
+    async def fake_drive_adk(agent, initial_state):
+        yield N(author="step_format", partial=False, content=N(parts=[N(text="# ok")]),
+                grounding_metadata=None, is_final_response=lambda: True, usage_metadata=None)
+
+    monkeypatch.setattr(notes, "_drive_adk", fake_drive_adk)
+    with caplog.at_level(logging.ERROR, logger="app.notes"):
+        body = "".join([c async for c in notes.run_pipeline(
+            _req(), _all_steps_methodology(), notes.get_settings())])
+    assert "event: done" in body  # client still gets a successful response
+    assert "provider_error" not in body
+    failed_records = [r for r in caplog.records
+                      if getattr(r, "fields", None) and r.getMessage() == "budget_increment_failed"]
+    assert len(failed_records) == 1
+
+
+@pytest.mark.asyncio
+async def test_usage_recorded_on_mid_stream_exception(monkeypatch):
+    monkeypatch.setattr(notes, "check_budget_tier",
+                        lambda _settings: (notes.BudgetTier.NORMAL, False))
+    recorded = {"called": False}
+
+    def fake_record_usage(month_key, *, cost_usd, prompt_tokens, output_tokens,
+                          request_count_delta=1):
+        recorded["called"] = True
+
+    monkeypatch.setattr(notes, "record_usage", fake_record_usage)
+
+    async def fake_events():
+        from types import SimpleNamespace as N
+        yield N(author="step_structure", partial=False, content=N(parts=[N(text="ok")]),
+                grounding_metadata=None, is_final_response=lambda: False, usage_metadata=None)
+        raise RuntimeError("boom mid-stream")
+        yield  # pragma: no cover - unreachable, keeps this an async generator
+
+    monkeypatch.setattr(notes, "_drive_adk", lambda *a, **k: fake_events())
+    body = "".join([c async for c in notes.run_pipeline(
+        _req(), _all_steps_methodology(), notes.get_settings())])
+    assert "event: error" in body
+    assert recorded["called"] is True  # partial runs still spent real tokens
