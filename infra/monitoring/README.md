@@ -47,7 +47,7 @@ Run once: `bash infra/monitoring/setup.sh`
 ```
 gcloud logging metrics list --project=max-personal-447802
 ```
-Expect the three metrics above listed. Trigger a real 401 (bad token) and a
+Expect the four metrics above listed. Trigger a real 401 (bad token) and a
 429 (exceed 10/minute on `/notes/stream`) against the deployed service, then
 check Cloud Logging shows matching entries and (once alerting policies exist)
 that the alert fires.
