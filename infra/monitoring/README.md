@@ -11,8 +11,9 @@ Creates four log-based metrics from the structured log fields (`message`,
 - `backend-auth-denied` — 401/403s (credential-stuffing / abuse signal)
 - `backend-rate-limited` — 429s (early cost-runaway warning)
 - `backend-budget-degraded` — soft-tier events: web-search auto-disabled, requests
-  refused for budget, or the budget check itself was unavailable (below the hard $20
-  kill-switch in `infra/budget-kill-switch/`)
+  refused for budget, the budget check itself was unavailable, or a spend-recording
+  write to Firestore failed (below the hard $20 kill-switch in
+  `infra/budget-kill-switch/`)
 
 Run once: `bash infra/monitoring/setup.sh`
 

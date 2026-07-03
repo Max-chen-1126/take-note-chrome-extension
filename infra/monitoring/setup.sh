@@ -32,8 +32,8 @@ create_metric_if_missing backend-rate-limited \
   --log-filter='resource.type="cloud_run_revision" resource.labels.service_name="'"$SERVICE_NAME"'" jsonPayload.status_code=429'
 
 create_metric_if_missing backend-budget-degraded \
-  --description="Soft budget-tier events (pipeline_degraded/pipeline_blocked/budget_check_unavailable) from take-note-backend, below the hard \$20 kill-switch" \
-  --log-filter='resource.type="cloud_run_revision" resource.labels.service_name="'"$SERVICE_NAME"'" (jsonPayload.message="pipeline_degraded" OR jsonPayload.message="pipeline_blocked" OR jsonPayload.message="budget_check_unavailable")'
+  --description="Soft budget-tier events (pipeline_degraded/pipeline_blocked/budget_check_unavailable/budget_increment_failed) from take-note-backend, below the hard \$20 kill-switch" \
+  --log-filter='resource.type="cloud_run_revision" resource.labels.service_name="'"$SERVICE_NAME"'" (jsonPayload.message="pipeline_degraded" OR jsonPayload.message="pipeline_blocked" OR jsonPayload.message="budget_check_unavailable" OR jsonPayload.message="budget_increment_failed")'
 
 echo "Log-based metrics created. Next: create the uptime check and alerting"
 echo "policies — see infra/monitoring/README.md (gcloud monitoring CLI syntax"

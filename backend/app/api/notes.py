@@ -167,6 +167,12 @@ async def run_pipeline(req: NoteRequest, methodology, settings) -> AsyncIterator
             yield sse("step", {"step": step_name, "status": "done", "summary": None})
         prompt_tokens, output_tokens = _sum_token_usage(last_usage_by_step)
         cost_usd = _record_usage_safely(model_id, prompt_tokens, output_tokens)
+        # Deliberately logs effective_web_search (what actually ran), not
+        # req.web_search (what the client asked for) — under DEGRADE these
+        # differ, and this field exists to recalibrate the token-only cost
+        # estimate against real per-call grounding cost, so it must reflect
+        # whether grounding actually happened. The original client intent is
+        # still recoverable from the separate pipeline_degraded log event.
         log_event(logger, logging.INFO, "pipeline_done", markdown_chars=len(final_markdown),
                  elapsed_ms=round((time.monotonic() - start) * 1000, 1),
                  prompt_tokens=prompt_tokens, output_tokens=output_tokens,
