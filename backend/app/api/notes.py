@@ -92,9 +92,11 @@ async def run_pipeline(req: NoteRequest, methodology, settings) -> AsyncIterator
         yield sse("error", {"code": "methodology_not_found", "message": req.methodology_id})
         return
 
-    tier, usage_unavailable = check_budget_tier(settings)
-    if usage_unavailable:
-        log_event(logger, logging.WARNING, "budget_check_unavailable")
+    # check_budget_tier() itself already logs "budget_check_unavailable" (with
+    # error_message) on both its fail-open paths — don't log it again here,
+    # or every fail-open produces two log lines for the same event, which
+    # would double-count in the log-based metric built on this event name.
+    tier, _usage_unavailable = check_budget_tier(settings)
     if tier == BudgetTier.BLOCK:
         log_event(logger, logging.WARNING, "pipeline_blocked", reason="budget_block")
         yield sse("error", {"code": "budget_exceeded", "message": _BUDGET_EXCEEDED_MESSAGE})
