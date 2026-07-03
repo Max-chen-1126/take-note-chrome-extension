@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     min_content_chars: int = 200
     max_body_bytes: int = 4_000_000   # 早期拒絕過大請求 body（413）
     expected_max_instances: int = 1   # 見 §rate limiter guard：in-memory limiter 僅在單一實例下正確
+    rate_limit_per_minute: str = "10/minute"  # was hardcoded on the route decorator
+    monthly_budget_usd: float = 20.0   # NOT auto-synced with the real GCP Billing Budget
+                                        # amount (infra/budget-kill-switch/) — keep in sync by hand
+    budget_degrade_threshold: float = 0.75   # spend/budget ratio: force web_search off
+    budget_block_threshold: float = 0.90     # spend/budget ratio: refuse new requests
 
     @property
     def allowed_email_set(self) -> set[str]:
@@ -47,6 +52,20 @@ class Settings(BaseSettings):
             raise ValueError(
                 "expected_max_instances must stay 1 until the rate limiter is "
                 "migrated off in-memory storage (see backend/app/core/limiter.py)."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _require_ordered_budget_thresholds(self) -> "Settings":
+        # Soft app-level tiers must sit strictly below the hard 100% GCP kill-switch,
+        # and strictly ordered, or the tier check in app/core/budget.py could silently
+        # gate nonsense (e.g. degrade firing above block).
+        if not (0 < self.budget_degrade_threshold < self.budget_block_threshold <= 1.0):
+            raise ValueError(
+                "budget_degrade_threshold must be > 0, < budget_block_threshold, and "
+                "budget_block_threshold must be <= 1.0 "
+                f"(got degrade={self.budget_degrade_threshold}, "
+                f"block={self.budget_block_threshold})."
             )
         return self
 

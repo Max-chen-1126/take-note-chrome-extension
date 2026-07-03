@@ -52,3 +52,53 @@ def test_expected_max_instances_above_one_raises(monkeypatch):
         cfg.get_settings()
     monkeypatch.delenv("EXPECTED_MAX_INSTANCES", raising=False)
     cfg.get_settings.cache_clear()
+
+
+def test_rate_limit_per_minute_default(monkeypatch):
+    monkeypatch.delenv("RATE_LIMIT_PER_MINUTE", raising=False)
+    cfg.get_settings.cache_clear()
+    assert cfg.get_settings().rate_limit_per_minute == "10/minute"
+
+
+def test_monthly_budget_usd_default(monkeypatch):
+    monkeypatch.delenv("MONTHLY_BUDGET_USD", raising=False)
+    cfg.get_settings.cache_clear()
+    assert cfg.get_settings().monthly_budget_usd == 20.0
+
+
+def test_budget_threshold_defaults(monkeypatch):
+    monkeypatch.delenv("BUDGET_DEGRADE_THRESHOLD", raising=False)
+    monkeypatch.delenv("BUDGET_BLOCK_THRESHOLD", raising=False)
+    cfg.get_settings.cache_clear()
+    settings = cfg.get_settings()
+    assert settings.budget_degrade_threshold == 0.75
+    assert settings.budget_block_threshold == 0.90
+
+
+def test_budget_thresholds_out_of_order_raises(monkeypatch):
+    monkeypatch.setenv("BUDGET_DEGRADE_THRESHOLD", "0.9")
+    monkeypatch.setenv("BUDGET_BLOCK_THRESHOLD", "0.5")
+    cfg.get_settings.cache_clear()
+    with pytest.raises(ValueError):
+        cfg.get_settings()
+    monkeypatch.delenv("BUDGET_DEGRADE_THRESHOLD", raising=False)
+    monkeypatch.delenv("BUDGET_BLOCK_THRESHOLD", raising=False)
+    cfg.get_settings.cache_clear()
+
+
+def test_budget_block_threshold_above_one_raises(monkeypatch):
+    monkeypatch.setenv("BUDGET_BLOCK_THRESHOLD", "1.5")
+    cfg.get_settings.cache_clear()
+    with pytest.raises(ValueError):
+        cfg.get_settings()
+    monkeypatch.delenv("BUDGET_BLOCK_THRESHOLD", raising=False)
+    cfg.get_settings.cache_clear()
+
+
+def test_budget_degrade_threshold_zero_raises(monkeypatch):
+    monkeypatch.setenv("BUDGET_DEGRADE_THRESHOLD", "0")
+    cfg.get_settings.cache_clear()
+    with pytest.raises(ValueError):
+        cfg.get_settings()
+    monkeypatch.delenv("BUDGET_DEGRADE_THRESHOLD", raising=False)
+    cfg.get_settings.cache_clear()
