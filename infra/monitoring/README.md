@@ -5,11 +5,14 @@ structured JSON logs added in the backend observability plan. No new paid
 tooling — everything here is Cloud Logging/Cloud Monitoring free tier.
 
 ## What `setup.sh` does
-Creates three log-based metrics from the structured log fields (`message`,
+Creates four log-based metrics from the structured log fields (`message`,
 `status_code`) emitted by `app.request`/`app.auth`/`app.notes`:
 - `backend-error-rate` — request/pipeline failures
 - `backend-auth-denied` — 401/403s (credential-stuffing / abuse signal)
 - `backend-rate-limited` — 429s (early cost-runaway warning)
+- `backend-budget-degraded` — soft-tier events: web-search auto-disabled, requests
+  refused for budget, or the budget check itself was unavailable (below the hard $20
+  kill-switch in `infra/budget-kill-switch/`)
 
 Run once: `bash infra/monitoring/setup.sh`
 
@@ -48,3 +51,12 @@ Expect the three metrics above listed. Trigger a real 401 (bad token) and a
 429 (exceed 10/minute on `/notes/stream`) against the deployed service, then
 check Cloud Logging shows matching entries and (once alerting policies exist)
 that the alert fires.
+
+## Budget thresholds are separate from the GCP Billing Budget
+
+`MONTHLY_BUDGET_USD`, `BUDGET_DEGRADE_THRESHOLD`, and `BUDGET_BLOCK_THRESHOLD` (backend app
+config, see `backend/app/core/config.py`) are **not automatically synced** with the actual
+GCP Billing Budget amount that triggers `infra/budget-kill-switch/`. If you ever change the
+real GCP budget, update `MONTHLY_BUDGET_USD` to match by hand, or the two systems will
+silently drift apart (the soft app-level tiers would fire at the wrong fraction of the real
+hard cutoff).
