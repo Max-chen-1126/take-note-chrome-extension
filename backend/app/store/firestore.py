@@ -75,3 +75,28 @@ def list_methodologies() -> list[dict]:
         })
     _list_cache = (now, out)
     return out
+
+
+def get_usage(month_key: str) -> dict | None:
+    doc = client_factory().collection("usage_counters").document(month_key).get()
+    if not doc.exists:
+        return None
+    return doc.to_dict()
+
+
+def record_usage(month_key: str, *, cost_usd: float, prompt_tokens: int, output_tokens: int,
+                  request_count_delta: int = 1) -> None:
+    # set(merge=True) with Increment (not update()) is deliberate: update() raises
+    # NotFound against a missing document, while set(merge=True) initializes the
+    # field from the increment delta if the doc doesn't exist yet — this IS the
+    # "new month resets to zero" mechanism, no explicit zeroing code needed.
+    client_factory().collection("usage_counters").document(month_key).set(
+        {
+            "total_cost_usd": firestore.Increment(cost_usd),
+            "total_prompt_tokens": firestore.Increment(prompt_tokens),
+            "total_output_tokens": firestore.Increment(output_tokens),
+            "request_count": firestore.Increment(request_count_delta),
+            "updated_at": firestore.SERVER_TIMESTAMP,
+        },
+        merge=True,
+    )

@@ -108,3 +108,69 @@ def test_list_methodologies_is_cached(monkeypatch):
     store.clear_cache()
     store.list_methodologies()
     assert calls["n"] == 2  # clear_cache() forces a re-stream
+
+
+def test_get_usage_missing_month_returns_none(monkeypatch):
+    monkeypatch.setattr(store, "client_factory", lambda: _Client(_Doc(False, None)))
+    assert store.get_usage("2099-01") is None
+
+
+def test_get_usage_existing_month_returns_dict(monkeypatch):
+    doc = _Doc(True, {"total_cost_usd": 3.2, "request_count": 5})
+    monkeypatch.setattr(store, "client_factory", lambda: _Client(doc))
+    result = store.get_usage("2026-07")
+    assert result["total_cost_usd"] == 3.2
+    assert result["request_count"] == 5
+
+
+class _RecordDoc:
+    def __init__(self):
+        self.set_calls = []
+    def set(self, data, merge=False):
+        self.set_calls.append((data, merge))
+
+
+class _RecordColl:
+    def __init__(self, doc):
+        self._doc = doc
+    def document(self, _id):
+        return self._doc
+
+
+class _RecordClient:
+    def __init__(self, doc):
+        self._doc = doc
+    def collection(self, name):
+        assert name == "usage_counters"
+        return _RecordColl(self._doc)
+
+
+def test_record_usage_writes_increments_with_merge(monkeypatch):
+    doc = _RecordDoc()
+    monkeypatch.setattr(store, "client_factory", lambda: _RecordClient(doc))
+    monkeypatch.setattr(store.firestore, "Increment", lambda v: ("INCR", v))
+    monkeypatch.setattr(store.firestore, "SERVER_TIMESTAMP", "SENTINEL_TIMESTAMP")
+
+    store.record_usage("2026-07", cost_usd=1.5, prompt_tokens=100, output_tokens=50)
+
+    assert len(doc.set_calls) == 1
+    data, merge = doc.set_calls[0]
+    assert merge is True
+    assert data["total_cost_usd"] == ("INCR", 1.5)
+    assert data["total_prompt_tokens"] == ("INCR", 100)
+    assert data["total_output_tokens"] == ("INCR", 50)
+    assert data["request_count"] == ("INCR", 1)
+    assert data["updated_at"] == "SENTINEL_TIMESTAMP"
+
+
+def test_record_usage_default_request_count_delta_is_one(monkeypatch):
+    doc = _RecordDoc()
+    monkeypatch.setattr(store, "client_factory", lambda: _RecordClient(doc))
+    monkeypatch.setattr(store.firestore, "Increment", lambda v: v)
+    monkeypatch.setattr(store.firestore, "SERVER_TIMESTAMP", "SENTINEL_TIMESTAMP")
+
+    store.record_usage("2026-07", cost_usd=0.1, prompt_tokens=1, output_tokens=1,
+                       request_count_delta=3)
+
+    data, _ = doc.set_calls[0]
+    assert data["request_count"] == 3
